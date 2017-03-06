@@ -22,9 +22,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import java.util.stream.Collectors;
-
-import com.iota.iri.model.Hash;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +32,9 @@ import com.iota.iri.Neighbor;
 import com.iota.iri.conf.Configuration;
 import com.iota.iri.conf.Configuration.DefaultConfSettings;
 import com.iota.iri.hash.Curl;
+import com.iota.iri.model.Hash;
 import com.iota.iri.model.Transaction;
+import com.iota.iri.service.storage.ReplicatorSinkPool;
 import com.iota.iri.service.storage.Storage;
 import com.iota.iri.service.storage.StorageScratchpad;
 import com.iota.iri.service.storage.StorageTransactions;
@@ -50,7 +49,7 @@ public class Node {
 
     private static final Node instance = new Node();
 
-    private static final int TRANSACTION_PACKET_SIZE = 1650;
+    public  static final int TRANSACTION_PACKET_SIZE = 1650;
     private static final int QUEUE_SIZE = 1000;
     private static final int PAUSE_BETWEEN_TRANSACTIONS = 1;
 
@@ -70,7 +69,7 @@ public class Node {
 
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
     
-    private static long TIMESTAMP_THRESHOLD = 0L;
+    public static long TIMESTAMP_THRESHOLD = 0L;
 
     public static void setTIMESTAMP_THRESHOLD(long tIMESTAMP_THRESHOLD) {
         TIMESTAMP_THRESHOLD = tIMESTAMP_THRESHOLD;
@@ -80,23 +79,29 @@ public class Node {
 
         socket = new DatagramSocket(Configuration.integer(DefaultConfSettings.TANGLE_RECEIVER_PORT));
 
-        Arrays.stream(Configuration.string(DefaultConfSettings.NEIGHBORS)
-                .split(" "))
-                .distinct()
-                .filter(s -> !s.isEmpty()).map(Node::uri).map(Optional::get)
-                .peek(u -> {
+        Arrays.stream(Configuration.string(DefaultConfSettings.NEIGHBORS).split(" ")).distinct()
+                .filter(s -> !s.isEmpty()).map(Node::uri).map(Optional::get).peek(u -> {
                     if (!"udp".equals(u.getScheme())) {
                         log.warn("WARNING: '{}' is not a valid udp:// uri schema.", u);
                     }
-                })
-                .filter(u -> "udp".equals(u.getScheme()))
-                .map(u -> new Neighbor(new InetSocketAddress(u.getHost(), u.getPort())))
-                .peek(u -> {
+                }).filter(u -> "udp".equals(u.getScheme()))
+                .map(u -> new Neighbor(new InetSocketAddress(u.getHost(), u.getPort()),false,true)).peek(u -> {
                     if (Configuration.booling(DefaultConfSettings.DEBUG)) {
                         log.debug("-> Adding neighbor : {} ", u.getAddress());
                     }
-                })
-                .forEach(neighbors::add);
+                }).forEach(neighbors::add);
+        
+        Arrays.stream(Configuration.string(DefaultConfSettings.NEIGHBORS).split(" ")).distinct()
+        .filter(s -> !s.isEmpty()).map(Node::uri).map(Optional::get).peek(u -> {
+            if (!"tcp".equals(u.getScheme())) {
+                log.warn("WARNING: '{}' is not a valid tcp:// uri schema.", u);
+            }
+        }).filter(u -> "tcp".equals(u.getScheme()))
+        .map(u -> new Neighbor(new InetSocketAddress(u.getHost(), u.getPort()),true,true)).peek(u -> {
+            if (Configuration.booling(DefaultConfSettings.DEBUG)) {
+                log.debug("-> Adding neighbor : {} ", u.getAddress());
+            }
+        }).forEach(neighbors::add);
 
         executor.submit(spawnReceiverThread());
         executor.submit(spawnBroadcasterThread());
@@ -206,6 +211,7 @@ public class Node {
                                             StorageTransactions.instance().setArrivalTime(pointer, System.currentTimeMillis() / 1000L);
                                             neighbor.incNewTransactions();
                                             broadcast(receivedTransaction);
+                                            ReplicatorSinkPool.instance().broadcast(receivedTransaction, null); // the TCP path
                                         }
 
                                         long transactionPointer = 0L;
@@ -372,11 +378,15 @@ public class Node {
     // helpers methods
 
     public boolean removeNeighbor(final URI uri) {
-        return neighbors.remove(new Neighbor(new InetSocketAddress(uri.getHost(), uri.getPort())));
+        return neighbors.remove(new Neighbor(new InetSocketAddress(uri.getHost(), uri.getPort()),false,false));
     }
 
     public boolean addNeighbor(final URI uri) {
-        final Neighbor neighbor = new Neighbor(new InetSocketAddress(uri.getHost(), uri.getPort()));
+        boolean isTcp = false;
+        if (uri.toString().contains("tcp:")) {
+            isTcp = true;
+        }
+        final Neighbor neighbor = new Neighbor(new InetSocketAddress(uri.getHost(), uri.getPort()),isTcp,false);
         if (!Node.instance().getNeighbors().contains(neighbor)) {
             return Node.instance().getNeighbors().add(neighbor);
         }

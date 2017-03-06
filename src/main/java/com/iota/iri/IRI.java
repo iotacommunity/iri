@@ -15,6 +15,7 @@ import com.iota.iri.conf.Configuration.DefaultConfSettings;
 import com.iota.iri.service.API;
 import com.iota.iri.service.Node;
 import com.iota.iri.service.TipsManager;
+import com.iota.iri.service.storage.Replicator;
 import com.iota.iri.service.storage.Storage;
 import com.sanityinc.jargs.CmdLineParser;
 import com.sanityinc.jargs.CmdLineParser.Option;
@@ -30,7 +31,7 @@ public class IRI {
     private static final Logger log = LoggerFactory.getLogger(IRI.class);
 
     public static final String NAME = "IRI Testnet";
-    public static final String VERSION = "1.1.2.10";
+    public static final String VERSION = "1.1.3.0";
 
     public static void main(final String[] args) {
 
@@ -39,12 +40,12 @@ public class IRI {
         shutdownHook();
 
         if (!Configuration.booling(DefaultConfSettings.HEADLESS)) {
-            showIotaLogo();
+            //showIotaLogo();
         }
 
         try {
-
-            Storage.instance().init();
+            Replicator.instance().init();
+            Storage.instance().init();            
             Node.instance().init();
             TipsManager.instance().init();
             API.instance().init();
