@@ -66,79 +66,103 @@ public class ReplicatorSourceProcessor implements Runnable {
             Neighbor fresh_neighbor = new Neighbor(inet_socket_address_normalized, true, false);
             if (!existingNeighbor) {
                 StringBuffer sb = new StringBuffer(80);
-                sb.append("Got connected from unknown neighbor tcp://")
+                sb.append("***** NETWORK ALERT ***** Got connected from unknown neighbor tcp://")
                     .append(inet_socket_address.getHostName())
                     .append(":")
                     .append(String.valueOf(inet_socket_address.getPort()))
                     .append(" (")
                     .append(inet_socket_address.getAddress().getHostAddress())
-                    .append(")");
+                    .append(") - closing connection");
                 log.info(sb.toString());
+                connection.close();
+                return;
+                /* -- This is possible code if tethering is disabled 
                 Node.instance().getNeighbors().add(fresh_neighbor);
-                fresh_neighbor.setSource(connection);
                 neighbor = fresh_neighbor;
-                neighbor.setTcpip(true);
+                */
             }
+            neighbor.setTcpip(true);
+            neighbor.setSource(connection);
             
-            if (neighbor.getSink() == null && !neighbor.isWaitingForSinkOpen() ) {
-                ReplicatorSinkPool.instance().createSink(neighbor);
-            }
-            
+            ReplicatorSinkPool.instance().createSink(neighbor);
+
             InputStream stream = connection.getInputStream();
-            log.info("Source {} open, configured = {}", inet_socket_address.getAddress().getHostAddress(), neighbor.isFlagged());
+            log.info("----- NETWORK INFO ----- Source {} is connected, configured = {}", inet_socket_address.getAddress().getHostAddress(), neighbor.isFlagged());
+            
+            connection.setSoTimeout(0);
             
             while (!shutdown) {
-                while (((count = stream.read(data, offset, TRANSACTION_PACKET_SIZE - offset)) != -1)
-                        && (offset < TRANSACTION_PACKET_SIZE)) {
+                boolean readError = false;
+
+                while (((count = stream.read(data, offset, TRANSACTION_PACKET_SIZE - offset)) != -1) && (offset < TRANSACTION_PACKET_SIZE)) {
                     offset += count;
                 }
-                if (count == -1)
-                    break;
               
+                if ( count == -1 || connection.isClosed() ) {
+                    readError = true;
+                    break;
+                }
+                
                 offset = 0;
-                                
-                try {
-                    neighbor.incAllTransactions();
-                    final Transaction receivedTransaction = new Transaction(data, receivedTransactionTrits, curl);
-                    long timestamp = (int) Converter.longValue(receivedTransaction.trits(), Transaction.TIMESTAMP_TRINARY_OFFSET, 27);
-                    if (timestamp > Node.TIMESTAMP_THRESHOLD) {
-                        if ((pointer = StorageTransactions.instance().storeTransaction(receivedTransaction.hash, receivedTransaction, false)) != 0L) {                         
-                            StorageTransactions.instance().setArrivalTime(pointer, System.currentTimeMillis() / 1000L);
-                            neighbor.incNewTransactions();                         
-                            Node.instance().broadcast(receivedTransaction); // the UDP path
-                            ReplicatorSinkPool.instance().broadcast(receivedTransaction, neighbor); // the TCP path
-                        }
 
-                        long transactionPointer = 0L;
-                        System.arraycopy(data, Transaction.SIZE, requestedTransaction, 0, Transaction.HASH_SIZE);
+                if (!readError) {
+                    try {
+                        neighbor.incAllTransactions();
+                        final Transaction receivedTransaction = new Transaction(data, receivedTransactionTrits, curl);
+                        long timestamp = (int) Converter.longValue(receivedTransaction.trits(),
+                                Transaction.TIMESTAMP_TRINARY_OFFSET, 27);
+                        if (timestamp > Node.TIMESTAMP_THRESHOLD) {
+                            if ((pointer = StorageTransactions.instance().storeTransaction(receivedTransaction.hash,
+                                    receivedTransaction, false)) != 0L) {
+                                StorageTransactions.instance().setArrivalTime(pointer,
+                                        System.currentTimeMillis() / 1000L);
+                                neighbor.incNewTransactions();
+                                // The UDP path
+                                Node.instance().broadcast(receivedTransaction);
+                                // The TCP path
+                                ReplicatorSinkPool.instance().broadcast(receivedTransaction, neighbor);                                                                 
+                            }
 
-                        if (!Arrays.equals(requestedTransaction, Transaction.NULL_TRANSACTION_HASH_BYTES)) {
-                            transactionPointer = StorageTransactions.instance().transactionPointer(requestedTransaction);
+                            long transactionPointer = 0L;
+                            System.arraycopy(data, Transaction.SIZE, requestedTransaction, 0, Transaction.HASH_SIZE);
 
-                            if (transactionPointer != 0L && transactionPointer > (Storage.CELLS_OFFSET - Storage.SUPER_GROUPS_OFFSET)) {
-                                synchronized (sendingPacket) {
-                                    System.arraycopy( StorageTransactions.instance().loadTransaction(transactionPointer).bytes, 0, sendingPacket.getData(), 0, Transaction.SIZE);
-                                    StorageScratchpad.instance().transactionToRequest(sendingPacket.getData(), Transaction.SIZE);
-                                    neighbor.send(sendingPacket);
+                            if (!Arrays.equals(requestedTransaction, Transaction.NULL_TRANSACTION_HASH_BYTES)) {
+                                transactionPointer = StorageTransactions.instance()
+                                        .transactionPointer(requestedTransaction);
+
+                                if (transactionPointer != 0L
+                                        && transactionPointer > (Storage.CELLS_OFFSET - Storage.SUPER_GROUPS_OFFSET)) {
+                                    synchronized (sendingPacket) {
+                                        System.arraycopy(
+                                                StorageTransactions.instance()
+                                                        .loadTransaction(transactionPointer).bytes,
+                                                0, sendingPacket.getData(), 0, Transaction.SIZE);
+                                        StorageScratchpad.instance().transactionToRequest(sendingPacket.getData(),
+                                                Transaction.SIZE);
+                                        neighbor.send(sendingPacket);
+                                    }
                                 }
                             }
                         }
+                    } catch (final RuntimeException e) {
+                        log.error("Received an Invalid Transaction. Dropping it...");
+                        neighbor.incInvalidTransactions();
                     }
-                } catch (final RuntimeException e) {
-                    log.error("Received an Invalid Transaction. Dropping it...");
-                    neighbor.incInvalidTransactions();
                 }
-
+                else {
+                    log.error("***** NETWORK ALERT ***** TCP connection reset by network {}, source closed", neighbor.getAddress().getAddress().getHostAddress());
+                    break;
+                }
             }
         } catch (IOException e) {
-            log.error("TCP onnection reset by neighbor {}, source closed", neighbor.getAddress().getAddress().getHostAddress());
+            log.error("***** NETWORK ALERT ***** TCP connection reset by neighbor {}, source closed, {}", neighbor.getAddress().getAddress().getHostAddress(), e.getMessage());
             ReplicatorSinkPool.instance().shutdownSink(neighbor);
         } finally {
-            neighbor.setSource(null);
-            neighbor.setWaitingForSinkOpen(false);
-            neighbor.setSink(null);
-            ReplicatorSinkPool.instance().shutdownSink(neighbor);
-
+            if (neighbor != null) {
+                ReplicatorSinkPool.instance().shutdownSink(neighbor);
+                neighbor.setSource(null);
+                neighbor.setSink(null);                
+            }
         }
     }
 }

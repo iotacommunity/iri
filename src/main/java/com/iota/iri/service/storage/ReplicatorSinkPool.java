@@ -29,8 +29,17 @@ public class ReplicatorSinkPool  implements Runnable {
     public void run() {
         
         sinkPool = Executors.newFixedThreadPool(Replicator.NUM_THREADS);
-        {
+        {           
             List<Neighbor> neighbors = Node.instance().getNeighbors();
+            // wait until list is populated
+            int loopcnt = 10;
+            while ((loopcnt-- > 0) && neighbors.size() == 0) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    log.error("Interrupted");
+                }
+            }
             neighbors.forEach(n -> {
                 if (n.isTcpip() && n.isFlagged()) {
                     createSink(n);
@@ -39,14 +48,13 @@ public class ReplicatorSinkPool  implements Runnable {
         }
         
         while (true) {
+            // Restart attempt for neighbors that are in the configuration.
             try {                
-                Thread.sleep(5000);
+                Thread.sleep(30000);
                 List<Neighbor> neighbors = Node.instance().getNeighbors();
                 neighbors.forEach(n -> {
-                    if (n.isTcpip()) {
-                        if ( n.isTcpip() && n.isFlagged() && (n.getSink() == null) && !n.isWaitingForSinkOpen() ) {
-                            createSink(n);
-                        }
+                    if (n.isTcpip() && n.isFlagged() && n.getSink() == null) {
+                        createSink(n);
                     }
                 });
             } catch (InterruptedException e) {
@@ -55,9 +63,7 @@ public class ReplicatorSinkPool  implements Runnable {
         }        
     }
     
-    public void createSink(Neighbor neighbor) {
-        if (neighbor.getSink() != null) return;
-        neighbor.setWaitingForSinkOpen(true);
+    public void createSink(Neighbor neighbor) {        
         Runnable proc = new ReplicatorSinkProcessor( neighbor );
         sinkPool.submit(proc);
     }
@@ -84,8 +90,7 @@ public class ReplicatorSinkPool  implements Runnable {
                 neighbors.forEach(n -> {
                     //if ( (neighbor == null) || (neighbor.getSink() != n.getSink()) ) {
                     {
-                        if (n.isTcpip() && (n.getSink() != null) && !n.isWaitingForSinkOpen()) {
-
+                        if (n.isTcpip() && (n.getSink() != null) && !n.getSink().isClosed()) {
                             try {
                                 synchronized (sendingPacket) {
                                     System.arraycopy(transaction.bytes, 0, sendingPacket.getData(), 0,
