@@ -11,6 +11,8 @@ import org.rocksdb.RocksIterator;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -484,6 +486,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     }
 
     private void createBackup(String path) throws IOException {
+        Paths.get(path).toFile().mkdir();
         saveBytes(path + "/transaction.map",objectBytes(transactionMap));
         saveBytes(path + "/bundle.map",objectBytes(bundleMap));
         saveBytes(path + "/approvee.map",objectBytes(approveeMap));
