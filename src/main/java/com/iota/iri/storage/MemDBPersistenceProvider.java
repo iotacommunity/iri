@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.security.SecureRandom;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -22,12 +23,12 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     private static final org.slf4j.Logger log = LoggerFactory.getLogger(MemDBPersistenceProvider.class);
 
-    private final Map<Hash, Transaction> transactionMap = new HashMap<>();
-    private final Map<Hash, Address> addressMap = new HashMap<>();
-    private final Map<Hash, Bundle> bundleMap = new HashMap<>();
-    private final Map<Hash, Approvee> approveeMap = new HashMap<>();
-    private final Map<Hash, Tag> tagMap = new HashMap<>();
-    private final Map<Hash, Tip> tipMap = new HashMap<>();
+    private final Map<Hash, Transaction> transactionMap = new ConcurrentHashMap<>();
+    private final Map<Hash, Address> addressMap = new ConcurrentHashMap<>();
+    private final Map<Hash, Bundle> bundleMap = new ConcurrentHashMap<>();
+    private final Map<Hash, Approvee> approveeMap = new ConcurrentHashMap<>();
+    private final Map<Hash, Tag> tagMap = new ConcurrentHashMap<>();
+    private final Map<Hash, Tip> tipMap = new ConcurrentHashMap<>();
     private final TreeMap<Integer, Milestone> milestoneMap = new TreeMap<>();
 
     private final Map<Class<?>, Map> classTreeMap = new HashMap<>();
