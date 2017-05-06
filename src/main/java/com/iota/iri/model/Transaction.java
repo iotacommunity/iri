@@ -1,9 +1,11 @@
 package com.iota.iri.model;
 
+import java.io.Serializable;
+
 /**
  * Created by paul on 3/2/17 for iri.
  */
-public class Transaction {
+public class Transaction implements Serializable{
 
     public Hash hash;
 

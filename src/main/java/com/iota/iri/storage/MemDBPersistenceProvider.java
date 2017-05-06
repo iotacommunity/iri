@@ -146,7 +146,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
         try {
             createBackup(Configuration.string(Configuration.DefaultConfSettings.DB_PATH));
         } catch (IOException e) {
-            log.error("Could not create memdb backup.");
+            log.error("Could not create memdb backup. ", e);
         }
         transactionMap.clear();
         addressMap.clear();
@@ -486,7 +486,10 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     }
 
     private void createBackup(String path) throws IOException {
-        Paths.get(path).toFile().mkdir();
+        Path dbPath = Paths.get(path);
+        if(!dbPath.toFile().exists()) {
+            dbPath.toFile().mkdir();
+        }
         saveBytes(path + "/transaction.map",objectBytes(transactionMap));
         saveBytes(path + "/bundle.map",objectBytes(bundleMap));
         saveBytes(path + "/approvee.map",objectBytes(approveeMap));
