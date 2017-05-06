@@ -178,8 +178,8 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
         }
         approveeMap.put(transaction.trunk.hash, transaction.trunk);
         transaction.branch.transactions = new Hash[]{transaction.hash};
-        Approvee branch = approveeMap.get(transaction.trunk.hash);
-        if(trunk != null) {
+        Approvee branch = approveeMap.get(transaction.branch.hash);
+        if(branch != null) {
             transaction.branch.transactions = ArrayUtils.addAll(branch.transactions, transaction.branch.transactions);
         }
         approveeMap.put(transaction.branch.hash, transaction.branch);
