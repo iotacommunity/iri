@@ -61,7 +61,9 @@ public class Node {
     private double P_SEND_MILESTONE;
 
     private LRUHashCache recentSeenHashes = new LRUHashCache(5000);
-    private LRUByteCache recentSeenBytes = new LRUByteCache(15000);
+    //TODO - remove, recentSeenBytes==1 only for testing
+    //private LRUByteCache recentSeenBytes = new LRUByteCache(15000);
+    private LRUByteCache recentSeenBytes = new LRUByteCache(1);
 
     private FIFOHashNeighborCache recentSeenRequests = new FIFOHashNeighborCache(2000);
 
