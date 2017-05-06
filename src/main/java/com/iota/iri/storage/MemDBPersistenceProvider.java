@@ -349,9 +349,27 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     private MyRunnable<Object> latestMilestone = () -> milestoneMap.isEmpty()? null: milestoneMap.lastEntry().getValue();
 
-    private MyFunction<Object, Object> nextMilestone = (start) -> milestoneMap.isEmpty()? null: milestoneMap.ceilingEntry((int)start + 1).getValue();
+    private MyFunction<Object, Object> nextMilestone = (start) -> {
+        if(milestoneMap.isEmpty()) {
+            return null;
+        }
+        Map.Entry entry = milestoneMap.ceilingEntry((int)start + 1);
+        if(entry == null) {
+            return null;
+        }
+        return entry.getValue();
+    };
 
-    private MyFunction<Object, Object> previousMilestone = (start) -> milestoneMap.isEmpty()? null: milestoneMap.floorEntry((int)start - 1).getValue();
+    private MyFunction<Object, Object> previousMilestone = (start) -> {
+        if(milestoneMap.isEmpty()) {
+            return null;
+        }
+        Map.Entry entry = milestoneMap.floorEntry((int)start - 1);
+            if(entry == null) {
+            return null;
+        }
+            return entry.getValue();
+    };
 
     private final MyFunction<Object, Boolean> getBundle = bundleObj -> {
         Bundle bundle = ((Bundle) bundleObj);
