@@ -22,13 +22,13 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     private static final org.slf4j.Logger log = LoggerFactory.getLogger(MemDBPersistenceProvider.class);
 
-    private Map<Hash, Transaction> transactionMap = new HashMap<>();
-    private Map<Hash, Address> addressMap = new HashMap<>();
-    private Map<Hash, Bundle> bundleMap = new HashMap<>();
-    private Map<Hash, Approvee> approveeMap = new HashMap<>();
-    private Map<Hash, Tag> tagMap = new HashMap<>();
-    private Map<Hash, Tip> tipMap = new HashMap<>();
-    private TreeMap<Integer, Milestone> milestoneMap = new TreeMap<>();
+    private final Map<Hash, Transaction> transactionMap = new HashMap<>();
+    private final Map<Hash, Address> addressMap = new HashMap<>();
+    private final Map<Hash, Bundle> bundleMap = new HashMap<>();
+    private final Map<Hash, Approvee> approveeMap = new HashMap<>();
+    private final Map<Hash, Tag> tagMap = new HashMap<>();
+    private final Map<Hash, Tip> tipMap = new HashMap<>();
+    private final TreeMap<Integer, Milestone> milestoneMap = new TreeMap<>();
 
     private final Map<Class<?>, Map> classTreeMap = new HashMap<>();
     private final Map<Class<?>, MyFunction<Object, Boolean>> saveMap = new HashMap<>();
@@ -48,6 +48,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public void init() throws Exception {
+        restoreBackup(Configuration.string(Configuration.DefaultConfSettings.DB_PATH));
         initClassTreeMap();
         initSaveMap();
         initLoadMap();
@@ -138,6 +139,11 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public void shutdown() {
+        try {
+            createBackup(Configuration.string(Configuration.DefaultConfSettings.DB_PATH));
+        } catch (IOException e) {
+            log.error("Could not create memdb backup.");
+        }
         transactionMap.clear();
         addressMap.clear();
         bundleMap.clear();
@@ -207,12 +213,14 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     }
 
     private Object objectFromBytes(byte[] bytes) throws IOException, ClassNotFoundException {
-        Object out;
-        ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
-        ObjectInputStream ois = new ObjectInputStream(bis);
-        out = ois.readObject();
-        ois.close();
-        bis.close();
+        Object out = null;
+        if(bytes.length > 0) {
+            ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
+            ObjectInputStream ois = new ObjectInputStream(bis);
+            out = ois.readObject();
+            ois.close();
+            bis.close();
+        }
         return out;
     }
 
@@ -336,13 +344,13 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
         return false;
     };
 
-    private MyRunnable<Object> firstMilestone = () -> milestoneMap.firstEntry().getValue();
+    private MyRunnable<Object> firstMilestone = () -> milestoneMap.isEmpty()? null: milestoneMap.firstEntry().getValue();
 
-    private MyRunnable<Object> latestMilestone = () -> milestoneMap.lastEntry().getValue();
+    private MyRunnable<Object> latestMilestone = () -> milestoneMap.isEmpty()? null: milestoneMap.lastEntry().getValue();
 
-    private MyFunction<Object, Object> nextMilestone = (start) -> milestoneMap.ceilingEntry((int)start + 1).getValue();
+    private MyFunction<Object, Object> nextMilestone = (start) -> milestoneMap.isEmpty()? null: milestoneMap.ceilingEntry((int)start + 1).getValue();
 
-    private MyFunction<Object, Object> previousMilestone = (start) -> milestoneMap.floorEntry((int)start - 1).getValue();
+    private MyFunction<Object, Object> previousMilestone = (start) -> milestoneMap.isEmpty()? null: milestoneMap.floorEntry((int)start - 1).getValue();
 
     private final MyFunction<Object, Boolean> getBundle = bundleObj -> {
         Bundle bundle = ((Bundle) bundleObj);
@@ -456,17 +464,60 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     }
 
     public void createBackup(String path) throws IOException {
-        objectBytes(transactionMap);
-        objectBytes(addressMap);
-        objectBytes(bundleMap);
-        objectBytes(approveeMap);
-        objectBytes(tagMap);
-        objectBytes(tipMap);
-        objectBytes(milestoneMap);
+        saveBytes(path + "transaction.map",objectBytes(transactionMap));
+        saveBytes(path + "bundle.map",objectBytes(bundleMap));
+        saveBytes(path + "approvee.map",objectBytes(approveeMap));
+        saveBytes(path + "tag.map",objectBytes(tagMap));
+        saveBytes(path + "tip.map",objectBytes(tipMap));
+        saveBytes(path + "milestone.map",objectBytes(milestoneMap));
     }
 
-    public void restoreBackup(String path, String logPath) throws Exception {
-        //objectFromBytes();
+    private void saveBytes(String path, byte[] bytes) throws IOException {
+        File file = new File(path);
+        file.createNewFile();
+        FileOutputStream fos = new FileOutputStream(file);
+        fos.write(bytes, 0, bytes.length);
+        fos.flush();
+        fos.close();
+    }
+
+    public void restoreBackup(String path) throws Exception {
+        Object db = objectFromBytes(loadBytes(path + "/transaction.map"));
+        if(db != null) {
+            transactionMap.putAll((Map<Hash, Transaction>) db);
+        }
+        db = objectFromBytes(loadBytes(path + "/bundle.map"));
+        if(db != null) {
+            bundleMap.putAll((Map<Hash, Bundle>) db);
+        }
+        db = objectFromBytes(loadBytes(path + "/approvee.map"));
+        if(db != null) {
+            approveeMap.putAll((Map<Hash, Approvee>) db);
+        }
+        db = objectFromBytes(loadBytes(path + "/tag.map"));
+        if(db != null) {
+            tagMap.putAll((Map<Hash, Tag>) db);
+        }
+        db = objectFromBytes(loadBytes(path + "/tip.map"));
+        if(db != null) {
+            tipMap.putAll((Map<Hash, Tip>) db);
+        }
+        db = objectFromBytes(loadBytes(path + "/milestone.map"));
+        if(db != null) {
+            milestoneMap.putAll((TreeMap<Integer, Milestone>) db);
+        }
+    }
+
+    private byte[] loadBytes(String path) throws IOException {
+        File inputFile = new File(path);
+        if(inputFile.exists()) {
+            byte[] data = new byte[(int) inputFile.length()];
+            FileInputStream fis = new FileInputStream(inputFile);
+            fis.read(data, 0, data.length);
+            fis.close();
+            return data;
+        }
+        return new byte[0];
     }
 
     @FunctionalInterface
