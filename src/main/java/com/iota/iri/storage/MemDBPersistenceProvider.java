@@ -32,6 +32,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     private final Map<Hash, Tag> tagMap = new ConcurrentHashMap<>();
     private final Map<Hash, Tip> tipMap = new ConcurrentHashMap<>();
     private final TreeMap<Integer, Milestone> milestoneMap = new TreeMap<>();
+    private final Object milestoneMapSync = new Object();
 
     private final Map<Class<?>, Map> classTreeMap = new HashMap<>();
     private final Map<Class<?>, MyFunction<Object, Boolean>> saveMap = new HashMap<>();
@@ -102,7 +103,9 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
             return null;
         });
         deleteMap.put(Milestone.class, msObj -> {
-            milestoneMap.remove(((Milestone) msObj).index);
+            synchronized (milestoneMapSync) {
+                milestoneMap.remove(((Milestone) msObj).index);
+            }
             return null;
         });
     }
@@ -201,7 +204,9 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     private final MyFunction<Object, Boolean> saveMilestone = msObj -> {
         Milestone milestone = ((Milestone) msObj);
-        milestoneMap.put(milestone.index, milestone);
+        synchronized (milestoneMapSync) {
+            milestoneMap.put(milestone.index, milestone);
+        }
         return true;
     };
 
@@ -338,7 +343,10 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     private final MyFunction<Object, Boolean> getMilestone = msObj -> {
         if(msObj instanceof Milestone) {
             Milestone milestone = ((Milestone) msObj);
-            Milestone result = milestoneMap.get(milestone.index);
+            Milestone result;
+            synchronized (milestoneMapSync) {
+                result = milestoneMap.get(milestone.index);
+            }
             if(result != null) {
                 milestone.hash = result.hash;
                 milestone.snapshot = result.snapshot;
@@ -348,15 +356,26 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
         return false;
     };
 
-    private MyRunnable<Object> firstMilestone = () -> milestoneMap.isEmpty()? null: milestoneMap.firstEntry().getValue();
+    private MyRunnable<Object> firstMilestone = () -> {
+        synchronized (milestoneMapSync) {
+            return milestoneMap.isEmpty() ? null : milestoneMap.firstEntry().getValue();
+        }
+    };
 
-    private MyRunnable<Object> latestMilestone = () -> milestoneMap.isEmpty()? null: milestoneMap.lastEntry().getValue();
+    private MyRunnable<Object> latestMilestone = () -> {
+        synchronized (milestoneMapSync) {
+            return milestoneMap.isEmpty() ? null : milestoneMap.lastEntry().getValue();
+        }
+    };
 
     private MyFunction<Object, Object> nextMilestone = (start) -> {
-        if(milestoneMap.isEmpty()) {
-            return null;
+        Map.Entry entry;
+        synchronized (milestoneMapSync) {
+            if(milestoneMap.isEmpty()) {
+                return null;
+            }
+            entry = milestoneMap.ceilingEntry((int) start + 1);
         }
-        Map.Entry entry = milestoneMap.ceilingEntry((int)start + 1);
         if(entry == null) {
             return null;
         }
@@ -364,11 +383,14 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     };
 
     private MyFunction<Object, Object> previousMilestone = (start) -> {
-        if(milestoneMap.isEmpty()) {
-            return null;
+        Map.Entry entry;
+        synchronized (milestoneMapSync) {
+            if (milestoneMap.isEmpty()) {
+                return null;
+            }
+            entry = milestoneMap.floorEntry((int) start - 1);
         }
-        Map.Entry entry = milestoneMap.floorEntry((int)start - 1);
-            if(entry == null) {
+        if(entry == null) {
             return null;
         }
             return entry.getValue();
@@ -470,7 +492,9 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     private MyFunction<Object, Boolean> updateMilestone() {
         return msObj -> {
             Milestone milestone = ((Milestone) msObj);
-            milestoneMap.put(milestone.index, milestone);
+            synchronized (milestoneMapSync) {
+                milestoneMap.put(milestone.index, milestone);
+            }
             return true;
         };
     }
@@ -495,7 +519,9 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
         saveBytes(path + "/approvee.map",objectBytes(approveeMap));
         saveBytes(path + "/tag.map",objectBytes(tagMap));
         saveBytes(path + "/tip.map",objectBytes(tipMap));
-        saveBytes(path + "/milestone.map",objectBytes(milestoneMap));
+        synchronized (milestoneMapSync) {
+            saveBytes(path + "/milestone.map", objectBytes(milestoneMap));
+        }
     }
 
     private void saveBytes(String path, byte[] bytes) throws IOException {
@@ -530,7 +556,9 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
         }
         db = objectFromBytes(loadBytes(path + "/milestone.map"));
         if(db != null) {
-            milestoneMap.putAll((TreeMap<Integer, Milestone>) db);
+            synchronized (milestoneMapSync) {
+                milestoneMap.putAll((TreeMap<Integer, Milestone>) db);
+            }
         }
     }
 
