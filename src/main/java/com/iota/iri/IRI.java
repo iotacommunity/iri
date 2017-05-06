@@ -243,7 +243,7 @@ public class IRI {
             Configuration.put(DefaultConfSettings.DB_LOG_PATH.name(), "testnetdb.log");
         }
 
-        if (parser.getOptionValue(memdb)) {
+        if (parser.getOptionValue(memdb) != null) {
             Configuration.put(DefaultConfSettings.MAIN_DB, "memdb");
         }
     }
