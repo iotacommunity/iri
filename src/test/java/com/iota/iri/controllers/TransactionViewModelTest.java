@@ -6,6 +6,7 @@ import com.iota.iri.model.Approvee;
 import com.iota.iri.model.Bundle;
 import com.iota.iri.model.Hash;
 import com.iota.iri.model.Transaction;
+import com.iota.iri.storage.MemDBPersistenceProvider;
 import com.iota.iri.storage.Tangle;
 import com.iota.iri.storage.rocksDB.RocksDBPersistenceProviderTest;
 import com.iota.iri.utils.Converter;
@@ -34,7 +35,7 @@ public class TransactionViewModelTest {
         logFolder.create();
         Configuration.put(Configuration.DefaultConfSettings.DB_PATH, dbFolder.getRoot().getAbsolutePath());
         Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, logFolder.getRoot().getAbsolutePath());
-        Tangle.instance().addPersistenceProvider(RocksDBPersistenceProviderTest.rocksDBPersistenceProvider);
+        Tangle.instance().addPersistenceProvider(new MemDBPersistenceProvider());
         Tangle.instance().init();
     }
 
