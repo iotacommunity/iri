@@ -154,6 +154,7 @@ public class IRI {
         final Option<Boolean> export = parser.addBooleanOption('e', "export");
         final Option<Boolean> help = parser.addBooleanOption('h', "help");
         final Option<Boolean> testnet = parser.addBooleanOption("testnet");
+        final Option<Boolean> memdb = parser.addBooleanOption("mem-db");
 
         try {
             assert args != null;
@@ -241,7 +242,10 @@ public class IRI {
             Configuration.put(DefaultConfSettings.DB_PATH.name(), "testnetdb");
             Configuration.put(DefaultConfSettings.DB_LOG_PATH.name(), "testnetdb.log");
         }
-        
+
+        if (parser.getOptionValue(memdb)) {
+            Configuration.put(DefaultConfSettings.MAIN_DB, "memdb");
+        }
     }
 
     private static void printUsage() {
