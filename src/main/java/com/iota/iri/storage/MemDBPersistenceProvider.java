@@ -139,6 +139,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public void shutdown() {
+        log.info("Shutting down memdb.");
         try {
             createBackup(Configuration.string(Configuration.DefaultConfSettings.DB_PATH));
         } catch (IOException e) {
@@ -464,12 +465,12 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     }
 
     public void createBackup(String path) throws IOException {
-        saveBytes(path + "transaction.map",objectBytes(transactionMap));
-        saveBytes(path + "bundle.map",objectBytes(bundleMap));
-        saveBytes(path + "approvee.map",objectBytes(approveeMap));
-        saveBytes(path + "tag.map",objectBytes(tagMap));
-        saveBytes(path + "tip.map",objectBytes(tipMap));
-        saveBytes(path + "milestone.map",objectBytes(milestoneMap));
+        saveBytes(path + "/transaction.map",objectBytes(transactionMap));
+        saveBytes(path + "/bundle.map",objectBytes(bundleMap));
+        saveBytes(path + "/approvee.map",objectBytes(approveeMap));
+        saveBytes(path + "/tag.map",objectBytes(tagMap));
+        saveBytes(path + "/tip.map",objectBytes(tipMap));
+        saveBytes(path + "/milestone.map",objectBytes(milestoneMap));
     }
 
     private void saveBytes(String path, byte[] bytes) throws IOException {
