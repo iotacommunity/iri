@@ -464,7 +464,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
         throw new NotImplementedException("Update for object " + thing.getClass().getName() + " is not implemented yet.");
     }
 
-    public void createBackup(String path) throws IOException {
+    private void createBackup(String path) throws IOException {
         saveBytes(path + "/transaction.map",objectBytes(transactionMap));
         saveBytes(path + "/bundle.map",objectBytes(bundleMap));
         saveBytes(path + "/approvee.map",objectBytes(approveeMap));
@@ -482,7 +482,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
         fos.close();
     }
 
-    public void restoreBackup(String path) throws Exception {
+    private void restoreBackup(String path) throws Exception {
         Object db = objectFromBytes(loadBytes(path + "/transaction.map"));
         if(db != null) {
             transactionMap.putAll((Map<Hash, Transaction>) db);
