@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /**
@@ -37,7 +38,7 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
 
     private List<ColumnFamilyHandle> transactionGetList;
 
-    private final Map<Class<?>, ColumnFamilyHandle> classTreeMap = new ConcurrentHashMap<>();
+    private final AtomicReference<Map<Class<?>, ColumnFamilyHandle>> classTreeMap = new AtomicReference<>();
     private final Map<Class<?>, Long> counts = new ConcurrentHashMap<>();
 
     private final SecureRandom seed = new SecureRandom();
@@ -66,13 +67,14 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
 
 
     private void initClassTreeMap() {
-        classTreeMap.put(Transaction.class, transactionHandle);
+        classTreeMap.set(new HashMap<>());
+        classTreeMap.get().put(Transaction.class, transactionHandle);
         counts.put(Transaction.class, 0L);
-        classTreeMap.put(Milestone.class, milestoneHandle);
+        classTreeMap.get().put(Milestone.class, milestoneHandle);
         counts.put(Milestone.class, 0L);
-        classTreeMap.put(StateDiff.class, stateDiffHandle);
+        classTreeMap.get().put(StateDiff.class, stateDiffHandle);
         counts.put(StateDiff.class, 0L);
-        classTreeMap.put(Hashes.class, hashesHandle);
+        classTreeMap.get().put(Hashes.class, hashesHandle);
         counts.put(Hashes.class, 0L);
     }
 
@@ -97,7 +99,7 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public boolean save(Persistable thing, Indexable index) throws Exception {
-        ColumnFamilyHandle handle = classTreeMap.get(thing.getClass());
+        ColumnFamilyHandle handle = classTreeMap.get().get(thing.getClass());
         if( !db.keyMayExist(handle, index.bytes(), new StringBuffer()) ) {
             counts.put(thing.getClass(), counts.get(thing.getClass()) + 1);
         }
@@ -107,22 +109,22 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public void delete(Class<?> model, Indexable index) throws Exception {
-        if( db.keyMayExist(classTreeMap.get(model), index.bytes(), new StringBuffer()) ) {
+        if( db.keyMayExist(classTreeMap.get().get(model), index.bytes(), new StringBuffer()) ) {
             counts.put(model, counts.get(model) + 1);
         }
-        db.delete(classTreeMap.get(model), index.bytes());
+        db.delete(classTreeMap.get().get(model), index.bytes());
     }
 
     @Override
     public boolean exists(Class<?> model, Indexable key) throws Exception {
-        ColumnFamilyHandle handle = classTreeMap.get(model);
+        ColumnFamilyHandle handle = classTreeMap.get().get(model);
         return handle != null && db.get(handle, key.bytes()) != null;
     }
 
     @Override
     public Persistable latest(Class<?> model) throws Exception {
         final Persistable object;
-        RocksIterator iterator = db.newIterator(classTreeMap.get(model));
+        RocksIterator iterator = db.newIterator(classTreeMap.get().get(model));
         iterator.seekToLast();
         if(iterator.isValid()) {
             object = (Persistable) model.newInstance();
@@ -136,7 +138,7 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public Set<Indexable> keysWithMissingReferences(Class<?> model) throws Exception {
-        ColumnFamilyHandle handle = classTreeMap.get(model);
+        ColumnFamilyHandle handle = classTreeMap.get().get(model);
         RocksIterator iterator = db.newIterator(handle);
         Set<Indexable> indexables = new HashSet<>();
         for(iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
@@ -151,19 +153,19 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
     @Override
     public Persistable get(Class<?> model, Indexable index) throws Exception {
         Persistable object = (Persistable) model.newInstance();
-        object.read(db.get(classTreeMap.get(model), index == null? new byte[0]: index.bytes()));
+        object.read(db.get(classTreeMap.get().get(model), index == null? new byte[0]: index.bytes()));
         return object;
     }
 
 
     @Override
     public boolean mayExist(Class<?> model, Indexable index) throws Exception {
-        return db.keyMayExist(classTreeMap.get(model), index.bytes(), new StringBuffer());
+        return db.keyMayExist(classTreeMap.get().get(model), index.bytes(), new StringBuffer());
     }
 
     @Override
     public long count(Class<?> model) throws Exception {
-        ColumnFamilyHandle handle = classTreeMap.get(model);
+        ColumnFamilyHandle handle = classTreeMap.get().get(model);
         long estimation = db.getLongProperty(handle, "rocksdb.estimate-num-keys");
         return counts.get(model);
     }
@@ -171,7 +173,7 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
     @Override
     public Set<Indexable> keysStartingWith(Class<?> modelClass, byte[] value) {
         RocksIterator iterator;
-        ColumnFamilyHandle handle = classTreeMap.get(modelClass);
+        ColumnFamilyHandle handle = classTreeMap.get().get(modelClass);
         Set<Indexable> keys = new HashSet<>();
         if(handle != null) {
             iterator = db.newIterator(handle);
@@ -205,7 +207,7 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public Persistable next(Class<?> model, Indexable index) throws Exception {
-        RocksIterator iterator = db.newIterator(classTreeMap.get(model));
+        RocksIterator iterator = db.newIterator(classTreeMap.get().get(model));
         final Persistable object;
         iterator.seek(index.bytes());
         iterator.next();
@@ -221,7 +223,7 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public Persistable  previous(Class<?> model, Indexable index) throws Exception {
-        RocksIterator iterator = db.newIterator(classTreeMap.get(model));
+        RocksIterator iterator = db.newIterator(classTreeMap.get().get(model));
         final Persistable object;
         iterator.seek(index.bytes());
         iterator.prev();
@@ -237,7 +239,7 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public Persistable first(Class<?> model) throws Exception {
-        RocksIterator iterator = db.newIterator(classTreeMap.get(model));
+        RocksIterator iterator = db.newIterator(classTreeMap.get().get(model));
         final Persistable object;
         iterator.seekToFirst();
         if(iterator.isValid()) {
