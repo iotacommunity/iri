@@ -359,7 +359,8 @@ public class Node {
         } else {
             //find requested trytes
             try {
-                transactionViewModel = TransactionViewModel.find(Arrays.copyOf(requestedHash.bytes(), TransactionRequester.REQUEST_HASH_SIZE));
+                //transactionViewModel = TransactionViewModel.find(Arrays.copyOf(requestedHash.bytes(), TransactionRequester.REQUEST_HASH_SIZE));
+                transactionViewModel = TransactionViewModel.fromHash(new Hash(requestedHash.bytes(), 0, TransactionRequester.REQUEST_HASH_SIZE));
                 log.debug("Requested Hash: " + requestedHash + " \nFound: " + transactionViewModel.getHash());
             } catch (Exception e) {
                 log.error("Error while searching for transaction.", e);
