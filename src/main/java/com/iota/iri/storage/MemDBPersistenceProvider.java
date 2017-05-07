@@ -29,16 +29,6 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     private final Object syncObj = new Object();
 
     private final Map<Class<?>, Map<Indexable, Persistable>> classTreeMap = new HashMap<>();
-    /*
-    private final Map<Class<?>, DoubleFunction<Object, Object>> saveMap = new HashMap<>();
-    private final Map<Class<?>, IndexFunction<Object>> deleteMap = new HashMap<>();
-    private final Map<Class<?>, MyFunction<Object, Object>> loadMap = new HashMap<>();
-    private final Map<Class<?>, MyFunction<Object, Boolean>> mayExistMap = new HashMap<>();
-    private final Map<Class<?>, MyFunction<Object, Object>> nextMap = new HashMap<>();
-    private final Map<Class<?>, MyFunction<Object, Object>> prevMap = new HashMap<>();
-    private final Map<Class<?>, MyRunnable<Object>> latestMap = new HashMap<>();
-    private final Map<Class<?>, MyRunnable<Object>> firstMap = new HashMap<>();
-    */
 
     private final SecureRandom seed = new SecureRandom();
 
@@ -48,13 +38,6 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     public void init() throws Exception {
         restoreBackup(Configuration.string(Configuration.DefaultConfSettings.DB_PATH));
         initClassTreeMap();
-        /*
-        initSaveMap();
-        initLoadMap();
-        initMayExistMap();
-        initDeleteMap();
-        initIteratingMaps();
-        */
         available = true;
     }
 
@@ -62,51 +45,6 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     public boolean isAvailable() {
         return this.available;
     }
-
-    /*
-    private void initIteratingMaps() {
-        firstMap.put(Milestone.class, firstMilestone);
-        latestMap.put(Milestone.class, latestMilestone);
-        nextMap.put(Milestone.class, nextMilestone);
-        prevMap.put(Milestone.class, previousMilestone);
-    }
-
-    private void initDeleteMap() {
-        deleteMap.put(Transaction.class, transactionMap::remove);
-        deleteMap.put(StateDiff.class, stateDiffMap::remove);
-        deleteMap.put(Hashes.class, hashesMap::remove);
-        deleteMap.put(Milestone.class, msObj -> {
-            synchronized (syncObj) {
-                milestoneMap.remove(((Milestone) msObj).index);
-            }
-        });
-    }
-
-    private void initMayExistMap() {
-        mayExistMap.put(Transaction.class, transactionMap::containsKey);
-        mayExistMap.put(StateDiff.class, stateDiffMap::containsKey);
-        mayExistMap.put(Hashes.class, hashesMap::containsKey);
-        mayExistMap.put(Milestone.class, key -> {
-            synchronized (syncObj) {
-                return milestoneMap.containsKey(key);
-            }
-        });
-    }
-
-    private void initLoadMap() {
-        loadMap.put(Transaction.class, getTransaction);
-        loadMap.put(Milestone.class, getMilestone);
-        loadMap.put(StateDiff.class, getStateDiff);
-        loadMap.put(Hashes.class, getHashes);
-    }
-
-    private void initSaveMap() {
-        saveMap.put(Transaction.class, saveTransaction);
-        saveMap.put(Hashes.class, saveHashes);
-        saveMap.put(Milestone.class, saveMilestone);
-        saveMap.put(StateDiff.class, saveStateDiff);
-    }
-    */
 
     private void initClassTreeMap() {
         classTreeMap.put(Transaction.class, transactionMap);
