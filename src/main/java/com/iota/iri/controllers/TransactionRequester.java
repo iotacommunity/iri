@@ -54,7 +54,7 @@ public class TransactionRequester {
         }
     }
 
-    public void requestTransaction(Hash hash, boolean milestone) throws ExecutionException, InterruptedException {
+    public void requestTransaction(Hash hash, boolean milestone) throws Exception {
         if (!hash.equals(Hash.NULL_HASH) && !TransactionViewModel.exists(hash)) {
             synchronized (this) {
                 if(milestone) {

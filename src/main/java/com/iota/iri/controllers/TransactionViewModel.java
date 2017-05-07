@@ -78,7 +78,7 @@ public class TransactionViewModel {
     public int weightMagnitude;
 
     public static TransactionViewModel find(byte[] hash) throws Exception {
-        return new TransactionViewModel((Transaction) Tangle.instance().find(Transaction.class, hash).get(), new Hash(hash));
+        return new TransactionViewModel((Transaction) Tangle.instance().find(Transaction.class, hash), new Hash(hash));
     }
 
     public static TransactionViewModel quietFromHash(final Hash hash) {
@@ -89,11 +89,11 @@ public class TransactionViewModel {
         }
     }
     public static TransactionViewModel fromHash(final Hash hash) throws Exception {
-        return new TransactionViewModel((Transaction) Tangle.instance().load(Transaction.class, hash).get(), hash);
+        return new TransactionViewModel((Transaction) Tangle.instance().load(Transaction.class, hash), hash);
     }
 
-    public static boolean mightExist(Hash hash) throws ExecutionException, InterruptedException {
-        return Tangle.instance().maybeHas(Transaction.class, hash).get();
+    public static boolean mightExist(Hash hash) throws Exception {
+        return Tangle.instance().maybeHas(Transaction.class, hash);
     }
 
     public TransactionViewModel(final Transaction transaction, final Hash hash) {
@@ -123,13 +123,13 @@ public class TransactionViewModel {
         transaction.type = FILLED_SLOT;
     }
 
-    public static int getNumberOfStoredTransactions() throws ExecutionException, InterruptedException {
-        return Tangle.instance().getCount(Transaction.class).get().intValue();
+    public static int getNumberOfStoredTransactions() throws Exception {
+        return Tangle.instance().getCount(Transaction.class).intValue();
     }
 
     public boolean update() throws Exception {
         getBytes();
-        return Tangle.instance().save(transaction, getHash()).get();
+        return Tangle.instance().save(transaction, getHash());
     }
 
     public TransactionViewModel getBranchTransaction() throws Exception {
@@ -160,7 +160,7 @@ public class TransactionViewModel {
     }
 
     public void delete() throws Exception {
-        Tangle.instance().delete(Transaction.class, getHash()).get();
+        Tangle.instance().delete(Transaction.class, getHash());
     }
     public boolean store() throws Exception {
         TransactionRequester.instance().clearTransactionRequest(getHash());
@@ -203,8 +203,8 @@ public class TransactionViewModel {
     }
 
 
-    public Set<Hash> getApprovers() throws ExecutionException, InterruptedException {
-        Hashes self = (Hashes) Tangle.instance().load(Hashes.class, hash).get();
+    public Set<Hash> getApprovers() throws Exception {
+        Hashes self = (Hashes) Tangle.instance().load(Hashes.class, hash);
         if(self == null || self.set == null) {
             return new HashSet<>();
         }
@@ -234,14 +234,14 @@ public class TransactionViewModel {
         return hash;
     }
 
-    public HashesViewModel getAddress() throws ExecutionException, InterruptedException {
+    public HashesViewModel getAddress() throws Exception {
         if(address == null) {
             address = HashesViewModel.load(getAddressHash());
         }
         return address;
     }
 
-    public HashesViewModel getTag() throws ExecutionException, InterruptedException {
+    public HashesViewModel getTag() throws Exception {
         return HashesViewModel.load(getTagValue());
     }
 
@@ -320,8 +320,8 @@ public class TransactionViewModel {
         return Converter.longValue(trits(), LAST_INDEX_TRINARY_OFFSET, LAST_INDEX_TRINARY_SIZE);
     }
 
-    public static boolean exists(Hash hash) throws ExecutionException, InterruptedException {
-        return Tangle.instance().exists(Transaction.class, hash).get();
+    public static boolean exists(Hash hash) throws Exception {
+        return Tangle.instance().exists(Transaction.class, hash);
     }
 
     public static void updateSolidTransactions(Set<Hash> analyzedHashes) throws Exception {

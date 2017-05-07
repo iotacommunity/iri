@@ -14,8 +14,8 @@ public class StateDiffViewModel {
     private StateDiff stateDiff;
     private Hash hash;
 
-    public static StateDiffViewModel load(Hash hash) throws ExecutionException, InterruptedException {
-        return new StateDiffViewModel((StateDiff) Tangle.instance().load(StateDiff.class, hash).get(), hash);
+    public static StateDiffViewModel load(Hash hash) throws Exception {
+        return new StateDiffViewModel((StateDiff) Tangle.instance().load(StateDiff.class, hash), hash);
     }
 
     public StateDiffViewModel(final Map<Hash, Long> state, final Hash hash) {
@@ -24,8 +24,8 @@ public class StateDiffViewModel {
         this.stateDiff.state = state;
     }
 
-    public static boolean exists(Hash hash) throws ExecutionException, InterruptedException {
-        return Tangle.instance().maybeHas(StateDiff.class, hash).get();
+    public static boolean exists(Hash hash) throws Exception {
+        return Tangle.instance().maybeHas(StateDiff.class, hash);
     }
 
     StateDiffViewModel(final StateDiff diff, final Hash hash) {
@@ -41,11 +41,12 @@ public class StateDiffViewModel {
         return stateDiff.state;
     }
 
-    public boolean store() throws ExecutionException, InterruptedException {
-        return Tangle.instance().save(stateDiff, hash).get();
+    public boolean store() throws Exception {
+        //return Tangle.instance().save(stateDiff, hash).get();
+        return Tangle.instance().save(stateDiff, hash);
     }
 
-    void delete() throws ExecutionException, InterruptedException {
-        Tangle.instance().delete(StateDiff.class, hash).get();
+    void delete() throws Exception {
+        Tangle.instance().delete(StateDiff.class, hash);
     }
 }

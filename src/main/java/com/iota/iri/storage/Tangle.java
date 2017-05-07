@@ -1,7 +1,6 @@
 package com.iota.iri.storage;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.iota.iri.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,46 +15,35 @@ public class Tangle {
 
     private static final Tangle instance = new Tangle();
     private final List<PersistenceProvider> persistenceProviders = new ArrayList<>();
-    private ExecutorService executor;
-    private static ThreadFactory namedThreadFactory = new ThreadFactoryBuilder().setNameFormat("Tangle-%d").build();
-    
+
     public void addPersistenceProvider(PersistenceProvider provider) {
         this.persistenceProviders.add(provider);
     }
 
     public void init() throws Exception {
-        executor = Executors.newFixedThreadPool(Math.max(1, Runtime.getRuntime().availableProcessors() * 4 ), namedThreadFactory );
         for(PersistenceProvider provider: this.persistenceProviders) {
             provider.init();
         }
-        //new TransactionViewModel(TransactionViewModel.NULL_TRANSACTION_BYTES, new int[TransactionViewModel.TRINARY_SIZE], null).store();
     }
 
 
     public void shutdown() throws Exception {
         log.info("Shutting down Tangle Persistence Providers... ");
-        executor.shutdown();
-        executor.awaitTermination(6, TimeUnit.SECONDS);
         this.persistenceProviders.forEach(PersistenceProvider::shutdown);
         this.persistenceProviders.clear();
     }
 
-    private Object loadNow(Class<?> model, Indexable index) throws Exception {
-        Object out = null;
-        for(PersistenceProvider provider: this.persistenceProviders) {
-            if((out = provider.get(model, index)) != null) {
-                break;
+    public Persistable load(Class<?> model, Indexable index) throws Exception {
+            Persistable out = null;
+            for(PersistenceProvider provider: this.persistenceProviders) {
+                if((out = provider.get(model, index)) != null) {
+                    break;
+                }
             }
-        }
-        return out;
+            return out;
     }
 
-    public Future<Object> load(Class<?> model, Indexable index) {
-        return executor.submit(() -> loadNow(model, index));
-    }
-
-    public Future<Boolean> save(Persistable model, Indexable index) {
-        return executor.submit(() -> {
+    public Boolean save(Persistable model, Indexable index) throws Exception {
             boolean exists = false;
             for(PersistenceProvider provider: persistenceProviders) {
                 if(exists) {
@@ -65,21 +53,15 @@ public class Tangle {
                 }
             }
             return exists;
-        });
     }
 
-    public Future<Void> delete(Class<?> model, Indexable index) {
-        return executor.submit(() -> {
+    public void delete(Class<?> model, Indexable index) throws Exception {
             for(PersistenceProvider provider: persistenceProviders) {
-                //while(!provider.isAvailable()) {}
                 provider.delete(model, index);
             }
-            return null;
-        });
     }
 
-    public Future<Persistable> getLatest(Class<?> model) {
-        return executor.submit(() -> {
+    public Persistable getLatest(Class<?> model) throws Exception {
             Persistable latest = null;
             for(PersistenceProvider provider: persistenceProviders) {
                 if (latest == null) {
@@ -87,11 +69,9 @@ public class Tangle {
                 }
             }
             return latest;
-        });
     }
 
-    public Future<Boolean> update(Persistable model, Indexable index, String item) {
-        return executor.submit(() -> {
+    public Boolean update(Persistable model, Indexable index, String item) throws Exception {
             boolean success = false;
             for(PersistenceProvider provider: this.persistenceProviders) {
                 if(success) {
@@ -101,15 +81,13 @@ public class Tangle {
                 }
             }
             return success;
-        });
     }
 
     public static Tangle instance() {
         return instance;
     }
 
-    public Future<Set<Indexable>> keysWithMissingReferences(Class<?> modelClass) {
-        return executor.submit(() -> {
+    public Set<Indexable> keysWithMissingReferences(Class<?> modelClass) throws Exception {
             Set<Indexable> output = null;
             for(PersistenceProvider provider: this.persistenceProviders) {
                 output = provider.keysWithMissingReferences(modelClass);
@@ -118,11 +96,9 @@ public class Tangle {
                 }
             }
             return output;
-        });
     }
 
-    public Future<Set<Indexable>> keysStartingWith(Class<?> modelClass, byte[] value) {
-        return executor.submit(() -> {
+    public Set<Indexable> keysStartingWith(Class<?> modelClass, byte[] value) {
             Set<Indexable> output = null;
             for(PersistenceProvider provider: this.persistenceProviders) {
                 output = provider.keysStartingWith(modelClass, value);
@@ -131,29 +107,23 @@ public class Tangle {
                 }
             }
             return output;
-        });
     }
 
-    public Future<Boolean> exists(Class<?> modelClass, Indexable hash) {
-        return executor.submit(() -> {
+    public Boolean exists(Class<?> modelClass, Indexable hash) throws Exception {
             for(PersistenceProvider provider: this.persistenceProviders) {
                 if(provider.exists(modelClass, hash)) return true;
             }
             return false;
-        });
     }
 
-    public Future<Boolean> maybeHas(Class<?> model, Indexable index) {
-        return executor.submit(() -> {
+    public Boolean maybeHas(Class<?> model, Indexable index) throws Exception {
             for(PersistenceProvider provider: this.persistenceProviders) {
                 if(provider.mayExist(model, index)) return true;
             }
             return false;
-        });
     }
 
-    public Future<Long> getCount(Class<?> modelClass) {
-        return executor.submit(() -> {
+    public Long getCount(Class<?> modelClass) throws Exception {
             long value = 0;
             for(PersistenceProvider provider: this.persistenceProviders) {
                 if((value = provider.count(modelClass)) != 0) {
@@ -161,11 +131,9 @@ public class Tangle {
                 }
             }
             return value;
-        });
     }
 
-    public Future<Persistable> find(Class<?> model, byte[] key) {
-        return executor.submit(() -> {
+    public Persistable find(Class<?> model, byte[] key) throws Exception {
             Persistable out = null;
             for (PersistenceProvider provider : this.persistenceProviders) {
                 if ((out = provider.seek(model, key)) != null) {
@@ -173,11 +141,9 @@ public class Tangle {
                 }
             }
             return out;
-        });
     }
 
-    public Future<Persistable> next(Class<?> model, Indexable index) {
-        return executor.submit(() -> {
+    public Persistable next(Class<?> model, Indexable index) throws Exception {
             Persistable latest = null;
             for(PersistenceProvider provider: persistenceProviders) {
                 if(latest == null) {
@@ -185,11 +151,9 @@ public class Tangle {
                 }
             }
             return latest;
-
-        });
     }
-    public Future<Persistable> previous(Class<?> model, Indexable index) {
-        return executor.submit(() -> {
+
+    public Persistable previous(Class<?> model, Indexable index) throws Exception {
             Persistable latest = null;
             for(PersistenceProvider provider: persistenceProviders) {
                 if(latest == null) {
@@ -197,12 +161,9 @@ public class Tangle {
                 }
             }
             return latest;
-
-        });
     }
 
-    public Future<Persistable> getFirst(Class<?> model) {
-        return executor.submit(() -> {
+    public Persistable getFirst(Class<?> model) throws Exception {
             Persistable latest = null;
             for(PersistenceProvider provider: persistenceProviders) {
                 if(latest == null) {
@@ -210,6 +171,5 @@ public class Tangle {
                 }
             }
             return latest;
-        });
     }
 }

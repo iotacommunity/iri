@@ -20,12 +20,12 @@ public class HashesViewModel {
         this.hash = hash;
     }
 
-    public static HashesViewModel load(Hash hash) throws ExecutionException, InterruptedException {
-        return new HashesViewModel((Hashes) Tangle.instance().load(Hashes.class, hash).get(), hash);
+    public static HashesViewModel load(Hash hash) throws Exception {
+        return new HashesViewModel((Hashes) Tangle.instance().load(Hashes.class, hash), hash);
     }
 
-    public boolean store() throws ExecutionException, InterruptedException {
-        return Tangle.instance().save(self, hash).get();
+    public boolean store() throws Exception {
+        return Tangle.instance().save(self, hash);
     }
 
     public boolean addHash(Hash theHash) {

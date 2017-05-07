@@ -62,7 +62,7 @@ public class TangleTest {
         int[] trits = getRandomTransactionTrits();
         TransactionViewModel transactionViewModel = new TransactionViewModel(trits, Hash.calculate(trits));
         transactionViewModel.store();
-        Set<Indexable> tag = Tangle.instance().keysStartingWith(Transaction.class, Arrays.copyOf(transactionViewModel.getTagValue().bytes(), 15)).get();
+        Set<Indexable> tag = Tangle.instance().keysStartingWith(Transaction.class, Arrays.copyOf(transactionViewModel.getTagValue().bytes(), 15));
         //Assert.assertNotEquals(tag.length, 0);
     }
 
