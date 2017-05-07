@@ -28,7 +28,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     private final Object syncObj = new Object();
 
-    private final Map<Class<?>, Map<Indexable, Persistable>> classTreeMap = new HashMap<>();
+    private final Map<Class<?>, Map<Indexable, Persistable>> classTreeMap = new ConcurrentHashMap<>();
 
     private final SecureRandom seed = new SecureRandom();
 

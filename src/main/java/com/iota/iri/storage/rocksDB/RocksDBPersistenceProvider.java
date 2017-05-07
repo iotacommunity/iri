@@ -37,7 +37,7 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
 
     private List<ColumnFamilyHandle> transactionGetList;
 
-    private final Map<Class<?>, ColumnFamilyHandle> classTreeMap = new HashMap<>();
+    private final Map<Class<?>, ColumnFamilyHandle> classTreeMap = new ConcurrentHashMap<>();
     private final Map<Class<?>, Long> counts = new ConcurrentHashMap<>();
 
     private final SecureRandom seed = new SecureRandom();
