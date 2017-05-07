@@ -449,7 +449,7 @@ public class Node {
                     long now = System.currentTimeMillis();
                     if ((now - lastTime) > 10000L) {
                         lastTime = now;
-                        log.info("toProcess = {} , toBroadcast = {} , toRequest = {} / totalTransactions = {}", getBroadcastQueueSize(),getReceiveQueueSize() ,TransactionRequester.instance().numberOfTransactionsToRequest() , TransactionViewModel.getNumberOfStoredTransactions());
+                        log.info("toProcess = {} , toBroadcast = {} , toRequest = {} / totalTransactions = {}", getReceiveQueueSize(), getBroadcastQueueSize() ,TransactionRequester.instance().numberOfTransactionsToRequest() , TransactionViewModel.getNumberOfStoredTransactions());
                     }
 
                     Thread.sleep(5000);
