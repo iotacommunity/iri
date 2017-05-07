@@ -12,7 +12,7 @@ import com.iota.iri.storage.Tangle;
 import com.iota.iri.utils.Converter;
 
 public class TransactionViewModel {
-    private static ExecutorService executorService = Executors.newCachedThreadPool();
+    //private static ExecutorService executorService = Executors.newCachedThreadPool();
 
     private final com.iota.iri.model.Transaction transaction;
 

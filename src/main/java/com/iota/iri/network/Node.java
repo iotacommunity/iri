@@ -20,6 +20,7 @@ import org.apache.commons.lang3.tuple.Triple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.iota.iri.Milestone;
 
 
@@ -54,7 +55,8 @@ public class Node {
     private final DatagramPacket tipRequestingPacket = new DatagramPacket(new byte[TRANSACTION_PACKET_SIZE],
             TRANSACTION_PACKET_SIZE);
 
-    private final ExecutorService executor = Executors.newFixedThreadPool(4);
+    private final ThreadFactory namedThreadFactory = new ThreadFactoryBuilder().setNameFormat("Node-%d").build();
+    private final ExecutorService executor = Executors.newFixedThreadPool(Math.max(1, Runtime.getRuntime().availableProcessors() * 4),namedThreadFactory);
 
     private double P_DROP_TRANSACTION;
     private static final SecureRandom rnd = new SecureRandom();
