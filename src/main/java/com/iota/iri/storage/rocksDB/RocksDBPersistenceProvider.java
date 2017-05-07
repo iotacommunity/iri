@@ -152,7 +152,7 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
     @Override
     public Persistable get(Class<?> model, Indexable index) throws Exception {
         Persistable object = (Persistable) model.newInstance();
-        object.read(db.get(classTreeMap.get(model), index.bytes()));
+        object.read(db.get(classTreeMap.get(model), index == null? new byte[0]: index.bytes()));
         return object;
     }
 

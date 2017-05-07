@@ -263,7 +263,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
                 if (map.isEmpty()) {
                     return null;
                 }
-                entry = ((TreeMap) map).ceilingEntry(index.decremented());
+                entry = ((TreeMap) map).ceilingEntry(index.incremented());
             }
             if (entry == null) {
                 return null;
@@ -280,7 +280,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
             if (milestoneMap.isEmpty()) {
                 return null;
             }
-            entry = milestoneMap.floorEntry( index.incremented());
+            entry = milestoneMap.floorEntry( index.decremented());
         }
         if(entry == null) {
             return null;

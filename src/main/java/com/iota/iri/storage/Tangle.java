@@ -76,7 +76,7 @@ public class Tangle {
         });
     }
 
-    public Future<Object> getLatest(Class<?> model) {
+    public Future<Persistable> getLatest(Class<?> model) {
         return executor.submit(() -> {
             Persistable latest = null;
             for(PersistenceProvider provider: persistenceProviders) {
@@ -162,9 +162,9 @@ public class Tangle {
         });
     }
 
-    public Future<Object> find(Class<?> model, byte[] key) {
+    public Future<Persistable> find(Class<?> model, byte[] key) {
         return executor.submit(() -> {
-            Object out = null;
+            Persistable out = null;
             for (PersistenceProvider provider : this.persistenceProviders) {
                 if ((out = provider.seek(model, key)) != null) {
                     break;
@@ -174,9 +174,9 @@ public class Tangle {
         });
     }
 
-    public Future<Object> next(Class<?> model, Indexable index) {
+    public Future<Persistable> next(Class<?> model, Indexable index) {
         return executor.submit(() -> {
-            Object latest = null;
+            Persistable latest = null;
             for(PersistenceProvider provider: persistenceProviders) {
                 if(latest == null) {
                     latest = provider.next(model, index);
@@ -186,9 +186,9 @@ public class Tangle {
 
         });
     }
-    public Future<Object> previous(Class<?> model, Indexable index) {
+    public Future<Persistable> previous(Class<?> model, Indexable index) {
         return executor.submit(() -> {
-            Object latest = null;
+            Persistable latest = null;
             for(PersistenceProvider provider: persistenceProviders) {
                 if(latest == null) {
                     latest = provider.previous(model, index);
@@ -199,9 +199,9 @@ public class Tangle {
         });
     }
 
-    public Future<Object> getFirst(Class<?> model) {
+    public Future<Persistable> getFirst(Class<?> model) {
         return executor.submit(() -> {
-            Object latest = null;
+            Persistable latest = null;
             for(PersistenceProvider provider: persistenceProviders) {
                 if(latest == null) {
                     latest = provider.first(model);

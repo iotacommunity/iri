@@ -324,7 +324,7 @@ public class TransactionViewModelTest {
     }
 
     @Test
-    public void findShoultReturnNull() throws Exception {
+    public void findShouldReturnNull() throws Exception {
         int[] trits = getRandomTransactionTrits();
         TransactionViewModel transactionViewModel = new TransactionViewModel(trits, Hash.calculate(trits));
         trits = getRandomTransactionTrits();
