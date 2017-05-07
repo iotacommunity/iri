@@ -1,5 +1,6 @@
 package com.iota.iri.storage;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.iota.iri.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,13 +17,14 @@ public class Tangle {
     private static final Tangle instance = new Tangle();
     private final List<PersistenceProvider> persistenceProviders = new ArrayList<>();
     private ExecutorService executor;
-
+    private static ThreadFactory namedThreadFactory = new ThreadFactoryBuilder().setNameFormat("Tangle-%d").build();
+    
     public void addPersistenceProvider(PersistenceProvider provider) {
         this.persistenceProviders.add(provider);
     }
 
     public void init() throws Exception {
-        executor = Executors.newCachedThreadPool();
+        executor = Executors.newFixedThreadPool(Math.max(1, Runtime.getRuntime().availableProcessors() * 4 ), namedThreadFactory );
         for(PersistenceProvider provider: this.persistenceProviders) {
             provider.init();
         }
