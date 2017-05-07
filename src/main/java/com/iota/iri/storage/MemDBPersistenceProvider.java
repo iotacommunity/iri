@@ -12,6 +12,7 @@ import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /**
@@ -28,7 +29,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     private final Object syncObj = new Object();
 
-    private final Map<Class<?>, Map<Indexable, Persistable>> classTreeMap = new ConcurrentHashMap<>();
+    private final AtomicReference<Map<Class<?>, Map<Indexable, Persistable>>> classTreeMap = new AtomicReference<>();
 
     private final SecureRandom seed = new SecureRandom();
 
@@ -47,10 +48,12 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     }
 
     private void initClassTreeMap() {
-        classTreeMap.put(Transaction.class, transactionMap);
-        classTreeMap.put(Milestone.class, milestoneMap);
-        classTreeMap.put(StateDiff.class, stateDiffMap);
-        classTreeMap.put(Hashes.class, hashesMap);
+        Map<Class<?>, Map<Indexable, Persistable>> classMap = new HashMap<>();
+        classMap.put(Transaction.class, transactionMap);
+        classMap.put(Milestone.class, milestoneMap);
+        classMap.put(StateDiff.class, stateDiffMap);
+        classMap.put(Hashes.class, hashesMap);
+        classTreeMap.set(classMap);
     }
 
     @Override
@@ -92,7 +95,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public boolean save(Persistable thing, Indexable index) throws Exception {
-        classTreeMap.get(thing.getClass()).put(index, thing);
+        classTreeMap.get().get(thing.getClass()).put(index, thing);
         //saveMap.get(thing.getClass()).apply(thing, index);
         return true;
     }
@@ -100,7 +103,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     @Override
     public void delete(Class<?> model, Indexable index) throws Exception {
         //deleteMap.get(model).apply(index.bytes());
-        classTreeMap.get(model).remove(index);
+        classTreeMap.get().get(model).remove(index);
     }
 
     private Hash[] byteToHash(byte[] bytes, int size) {
@@ -117,7 +120,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public boolean exists(Class<?> model, Indexable key) throws Exception {
-        Map<Indexable, Persistable> map = classTreeMap.get(model);
+        Map<Indexable, Persistable> map = classTreeMap.get().get(model);
         if(map instanceof ConcurrentHashMap) {
             return map.containsKey(key);
         } else {
@@ -129,7 +132,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public Persistable latest(Class<?> model) throws Exception {
-        Map<Indexable, Persistable> map = classTreeMap.get(model);
+        Map<Indexable, Persistable> map = classTreeMap.get().get(model);
         if(map instanceof TreeMap) {
             synchronized (syncObj) {
                 return map.isEmpty() ? null : (Persistable) ((TreeMap) map).lastEntry().getValue();
@@ -142,13 +145,13 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public Set<Indexable> keysWithMissingReferences(Class<?> modelClass) throws Exception {
-        return classTreeMap.get(modelClass).keySet().parallelStream().filter(h -> !hashesMap.containsKey(h)).collect(Collectors.toSet());
+        return classTreeMap.get().get(modelClass).keySet().parallelStream().filter(h -> !hashesMap.containsKey(h)).collect(Collectors.toSet());
     }
 
 
     @Override
     public Persistable get(Class<?> model, Indexable index) throws Exception {
-        Map<Indexable, Persistable> map = classTreeMap.get(model);
+        Map<Indexable, Persistable> map = classTreeMap.get().get(model);
         if(map instanceof ConcurrentHashMap) {
             return map.get(index);
         } else {
@@ -165,13 +168,13 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public long count(Class<?> model) throws Exception {
-        Map map = classTreeMap.get(model);
+        Map map = classTreeMap.get().get(model);
         return map == null ? 0 : map.size();
     }
 
     @Override
     public Set<Indexable> keysStartingWith(Class<?> modelClass, byte[] value) {
-        Map handle = classTreeMap.get(modelClass);
+        Map handle = classTreeMap.get().get(modelClass);
         if(handle != null) {
             Set<Hash> keySet = handle.keySet();
             return keySet.parallelStream().filter(h -> Arrays.equals(Arrays.copyOf(h.bytes(), value.length), value))
@@ -194,7 +197,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public Persistable next(Class<?> model, Indexable index) throws Exception {
-        Map<Indexable, Persistable> map = classTreeMap.get(model);
+        Map<Indexable, Persistable> map = classTreeMap.get().get(model);
         if(map instanceof TreeMap) {
             Map.Entry entry;
             synchronized (syncObj) {

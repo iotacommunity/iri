@@ -69,14 +69,15 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
     private void initClassTreeMap() {
         Map<Class<?>, ColumnFamilyHandle> classMap = new HashMap<>();
         classMap.put(Transaction.class, transactionHandle);
-        counts.put(Transaction.class, 0L);
         classMap.put(Milestone.class, milestoneHandle);
-        counts.put(Milestone.class, 0L);
         classMap.put(StateDiff.class, stateDiffHandle);
-        counts.put(StateDiff.class, 0L);
         classMap.put(Hashes.class, hashesHandle);
-        counts.put(Hashes.class, 0L);
         classTreeMap.set(classMap);
+
+        counts.put(Transaction.class, 0L);
+        counts.put(Milestone.class, 0L);
+        counts.put(StateDiff.class, 0L);
+        counts.put(Hashes.class, 0L);
     }
 
     @Override
