@@ -60,7 +60,7 @@ public class TransactionViewModel {
     private HashesViewModel bundle;
     private TransactionViewModel trunk;
     private TransactionViewModel branch;
-    private Hash hash;
+    private final Hash hash;
     public Hash addressHash;
     public Hash bundleHash;
     public Hash trunkHash;
