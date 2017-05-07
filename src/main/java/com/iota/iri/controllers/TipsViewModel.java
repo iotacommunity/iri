@@ -88,6 +88,8 @@ public class TipsViewModel {
     public static void loadTipHashes() throws ExecutionException, InterruptedException {
         Set<Indexable> hashes = Tangle.instance()
                 .keysWithMissingReferences(Transaction.class).get();
-        tips.addAll(hashes.stream().map(h -> (Hash) h).collect(Collectors.toList()));
+        if(hashes != null) {
+            tips.addAll(hashes.stream().map(h -> (Hash) h).collect(Collectors.toList()));
+        }
     }
 }
