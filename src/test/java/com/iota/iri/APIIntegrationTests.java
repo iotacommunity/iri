@@ -202,14 +202,14 @@ public class APIIntegrationTests {
      * curl http://localhost:14265 \
      -X POST \
      -H 'Content-Type: application/json' \
-     -d '{"command": "getInclusionStates", "transactions": ["QHBYXQWRAHQJZEIARWSQGZJTAIITOZRMBFICIPAVD9YRJMXFXBDPFDTRAHHHP9YPDUVTNOFWZGFGWMYHEKNAGNJHMW"], "tips": ["ZIJGAJ9AADLRPWNCYNNHUHRRAC9QOUDATEDQUMTNOTABUVRPTSTFQDGZKFYUUIE9ZEBIVCCXXXLKX9999"]}'
+     -d '{"command": "getInclusionStates", "set": ["QHBYXQWRAHQJZEIARWSQGZJTAIITOZRMBFICIPAVD9YRJMXFXBDPFDTRAHHHP9YPDUVTNOFWZGFGWMYHEKNAGNJHMW"], "tips": ["ZIJGAJ9AADLRPWNCYNNHUHRRAC9QOUDATEDQUMTNOTABUVRPTSTFQDGZKFYUUIE9ZEBIVCCXXXLKX9999"]}'
      */
     @Test
     public void shouldTestGetInclusionStates() {
 
         final Map<String, Object> request = new HashMap<>();
         request.put("command", "getInclusionStates");
-        request.put("transactions", new String [] {"999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"});
+        request.put("set", new String [] {"999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"});
         request.put("tips", new String [] {"999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"});
         given().
                 contentType("application/json").

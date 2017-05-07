@@ -38,39 +38,39 @@ public class Tangle {
         this.persistenceProviders.clear();
     }
 
-    private boolean loadNow(Object object) throws Exception {
+    private Object loadNow(Class<?> model, Indexable index) throws Exception {
+        Object out = null;
         for(PersistenceProvider provider: this.persistenceProviders) {
-            //while(!provider.isAvailable()) {}
-            if(provider.get(object)) {
-                return true;
+            if((out = provider.get(model, index)) != null) {
+                break;
             }
         }
-        return false;
+        return out;
     }
 
-    public Future<Boolean> load(Object object) {
-        return executor.submit(() -> loadNow(object));
+    public Future<Object> load(Class<?> model, Indexable index) {
+        return executor.submit(() -> loadNow(model, index));
     }
 
-    public Future<Boolean> save(Object model) {
+    public Future<Boolean> save(Persistable model, Indexable index) {
         return executor.submit(() -> {
             boolean exists = false;
             for(PersistenceProvider provider: persistenceProviders) {
                 if(exists) {
-                    provider.save(model);
+                    provider.save(model, index);
                 } else {
-                   exists = provider.save(model);
+                   exists = provider.save(model, index);
                 }
             }
             return exists;
         });
     }
 
-    public Future<Void> delete(Object model) {
+    public Future<Void> delete(Class<?> model, Indexable index) {
         return executor.submit(() -> {
             for(PersistenceProvider provider: persistenceProviders) {
                 //while(!provider.isAvailable()) {}
-                provider.delete(model);
+                provider.delete(model, index);
             }
             return null;
         });
@@ -78,9 +78,8 @@ public class Tangle {
 
     public Future<Object> getLatest(Class<?> model) {
         return executor.submit(() -> {
-            Object latest = null;
+            Persistable latest = null;
             for(PersistenceProvider provider: persistenceProviders) {
-                //while(!provider.isAvailable()) {}
                 if (latest == null) {
                     latest = provider.latest(model);
                 }
@@ -89,14 +88,14 @@ public class Tangle {
         });
     }
 
-    public Future<Boolean> update(Object model, String item) {
+    public Future<Boolean> update(Persistable model, Indexable index, String item) {
         return executor.submit(() -> {
             boolean success = false;
             for(PersistenceProvider provider: this.persistenceProviders) {
                 if(success) {
-                    provider.update(model, item);
+                    provider.update(model, index, item);
                 } else {
-                    success = provider.update(model, item);
+                    success = provider.update(model, index, item);
                 }
             }
             return success;
@@ -107,13 +106,12 @@ public class Tangle {
         return instance;
     }
 
-    public Future<Object[]> keysWithMissingReferences(Class<?> modelClass) {
+    public Future<Set<Indexable>> keysWithMissingReferences(Class<?> modelClass) {
         return executor.submit(() -> {
-            Object[] output = new Object[0];
+            Set<Indexable> output = null;
             for(PersistenceProvider provider: this.persistenceProviders) {
-                //while(!provider.isAvailable()) {}
                 output = provider.keysWithMissingReferences(modelClass);
-                if(output != null && output.length > 0) {
+                if(output != null && output.size() > 0) {
                     break;
                 }
             }
@@ -121,13 +119,12 @@ public class Tangle {
         });
     }
 
-    public Future<Hash[]> keysStartingWith(Class<?> modelClass, byte[] value) {
+    public Future<Set<Indexable>> keysStartingWith(Class<?> modelClass, byte[] value) {
         return executor.submit(() -> {
-            Hash[] output = new Hash[0];
+            Set<Indexable> output = null;
             for(PersistenceProvider provider: this.persistenceProviders) {
-                //while(!provider.isAvailable()) {}
                 output = provider.keysStartingWith(modelClass, value);
-                if(output.length != 0) {
+                if(output.size() != 0) {
                     break;
                 }
             }
@@ -135,21 +132,19 @@ public class Tangle {
         });
     }
 
-    public Future<Boolean> exists(Class<?> modelClass, Hash hash) {
+    public Future<Boolean> exists(Class<?> modelClass, Indexable hash) {
         return executor.submit(() -> {
             for(PersistenceProvider provider: this.persistenceProviders) {
-                //while(!provider.isAvailable()) {}
                 if(provider.exists(modelClass, hash)) return true;
             }
             return false;
         });
     }
 
-    public Future<Boolean> maybeHas(Object object) {
+    public Future<Boolean> maybeHas(Class<?> model, Indexable index) {
         return executor.submit(() -> {
             for(PersistenceProvider provider: this.persistenceProviders) {
-                //while(!provider.isAvailable()) {}
-                if(provider.mayExist(object)) return true;
+                if(provider.mayExist(model, index)) return true;
             }
             return false;
         });
@@ -159,7 +154,6 @@ public class Tangle {
         return executor.submit(() -> {
             long value = 0;
             for(PersistenceProvider provider: this.persistenceProviders) {
-                //while(!provider.isAvailable()) {}
                 if((value = provider.count(modelClass)) != 0) {
                     break;
                 }
@@ -172,7 +166,6 @@ public class Tangle {
         return executor.submit(() -> {
             Object out = null;
             for (PersistenceProvider provider : this.persistenceProviders) {
-                //while(!provider.isAvailable()) {}
                 if ((out = provider.seek(model, key)) != null) {
                     break;
                 }
@@ -181,11 +174,10 @@ public class Tangle {
         });
     }
 
-    public Future<Object> next(Class<?> model, int index) {
+    public Future<Object> next(Class<?> model, Indexable index) {
         return executor.submit(() -> {
             Object latest = null;
             for(PersistenceProvider provider: persistenceProviders) {
-                //while(!provider.isAvailable()) {}
                 if(latest == null) {
                     latest = provider.next(model, index);
                 }
@@ -194,11 +186,10 @@ public class Tangle {
 
         });
     }
-    public Future<Object> previous(Class<?> model, int index) {
+    public Future<Object> previous(Class<?> model, Indexable index) {
         return executor.submit(() -> {
             Object latest = null;
             for(PersistenceProvider provider: persistenceProviders) {
-                //while(!provider.isAvailable()) {}
                 if(latest == null) {
                     latest = provider.previous(model, index);
                 }
@@ -212,7 +203,6 @@ public class Tangle {
         return executor.submit(() -> {
             Object latest = null;
             for(PersistenceProvider provider: persistenceProviders) {
-                //while(!provider.isAvailable()) {}
                 if(latest == null) {
                     latest = provider.first(model);
                 }

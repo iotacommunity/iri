@@ -24,7 +24,7 @@ public class BundleViewModelTest {
         logFolder.create();
         Configuration.put(Configuration.DefaultConfSettings.DB_PATH, dbFolder.getRoot().getAbsolutePath());
         Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, logFolder.getRoot().getAbsolutePath());
-        Tangle.instance().addPersistenceProvider(new MemDBPersistenceProvider());
+        Tangle.instance().addPersistenceProvider(RocksDBPersistenceProviderTest.rocksDBPersistenceProvider);
         Tangle.instance().init();
 
     }

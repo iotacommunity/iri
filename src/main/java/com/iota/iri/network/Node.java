@@ -297,13 +297,13 @@ public class Node {
         if(stored) {
             receivedTransactionViewModel.setArrivalTime(System.currentTimeMillis());
             try {
-                receivedTransactionViewModel.update("arrivalTime");
+                receivedTransactionViewModel.update();
                 receivedTransactionViewModel.updateSender(neighbor.getAddress().toString()); //TODO validate this change
 //                receivedTransactionViewModel.updateSender(neighbor instanceof TCPNeighbor?
 //                        senderAddress.toString(): neighbor.getAddress().toString() );
 
             } catch (Exception e) {
-                log.error("Error updating transactions.", e);
+                log.error("Error updating set.", e);
             }
             neighbor.incNewTransactions();
             broadcast(receivedTransactionViewModel);

@@ -1,10 +1,10 @@
 package com.iota.iri.controllers;
 
 import com.iota.iri.model.Hash;
+import com.iota.iri.model.IntegerIndex;
 import com.iota.iri.model.Milestone;
 import com.iota.iri.storage.Tangle;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -13,21 +13,21 @@ import java.util.concurrent.ExecutionException;
  * Created by paul on 4/11/17.
  */
 public class MilestoneViewModel {
-    private final Milestone milestoneModel;
+    private final Milestone milestone;
     private static final Map<Integer, MilestoneViewModel> milestones = new ConcurrentHashMap<>();
 
-    private MilestoneViewModel(Milestone milestone) {
-        this.milestoneModel = milestone;
+    private MilestoneViewModel(final Milestone milestone) {
+        this.milestone = milestone;
     }
 
     public static void clear() {
         milestones.clear();
     }
 
-    public MilestoneViewModel(int index, Hash milestoneHash) {
-        this.milestoneModel = new Milestone();
-        this.milestoneModel.index = index;
-        this.milestoneModel.hash = milestoneHash;
+    public MilestoneViewModel(final int index, final Hash milestoneHash) {
+        this.milestone = new Milestone();
+        this.milestone.index = new IntegerIndex(index);
+        milestone.hash = milestoneHash;
     }
 
     public static MilestoneViewModel get(int index) throws ExecutionException, InterruptedException {
@@ -39,9 +39,8 @@ public class MilestoneViewModel {
     }
 
     public static boolean load(int index) throws ExecutionException, InterruptedException {
-        Milestone milestone = new Milestone();
-        milestone.index = index;
-        if(Tangle.instance().load(milestone).get()) {
+        Milestone milestone = (Milestone) Tangle.instance().load(Milestone.class, new IntegerIndex(index)).get();
+        if(milestone != null && milestone.hash != null) {
             milestones.put(index, new MilestoneViewModel(milestone));
             return true;
         }
@@ -49,9 +48,9 @@ public class MilestoneViewModel {
     }
 
     public static MilestoneViewModel first() throws ExecutionException, InterruptedException {
-        Object msObj = Tangle.instance().getFirst(Milestone.class).get();
-        if(msObj != null && msObj instanceof Milestone) {
-            return new MilestoneViewModel((Milestone) msObj);
+        Milestone milestone = (Milestone) Tangle.instance().getFirst(Milestone.class).get();
+        if(milestone != null) {
+            return new MilestoneViewModel(milestone);
         }
         return null;
     }
@@ -65,7 +64,7 @@ public class MilestoneViewModel {
     }
 
     public MilestoneViewModel previous() throws ExecutionException, InterruptedException {
-        Object milestone = Tangle.instance().previous(Milestone.class, index()).get();
+        Object milestone = Tangle.instance().previous(Milestone.class, this.milestone.index).get();
         if(milestone != null && milestone instanceof Milestone) {
             return new MilestoneViewModel((Milestone) milestone);
         }
@@ -73,7 +72,7 @@ public class MilestoneViewModel {
     }
 
     public MilestoneViewModel next() throws ExecutionException, InterruptedException {
-        Object milestone = Tangle.instance().next(Milestone.class, index()).get();
+        Object milestone = Tangle.instance().next(Milestone.class, this.milestone.index).get();
         if(milestone != null && milestone instanceof Milestone) {
             return new MilestoneViewModel((Milestone) milestone);
         }
@@ -82,7 +81,7 @@ public class MilestoneViewModel {
 
     public MilestoneViewModel nextWithSnapshot() throws ExecutionException, InterruptedException {
         MilestoneViewModel milestoneViewModel = next();
-        while(milestoneViewModel !=null && milestoneViewModel.snapshot() == null) {
+        while(milestoneViewModel !=null && !StateDiffViewModel.exists(milestoneViewModel.getHash())) {
             milestoneViewModel = milestoneViewModel.next();
         }
         return milestoneViewModel;
@@ -90,14 +89,14 @@ public class MilestoneViewModel {
 
     public static MilestoneViewModel firstWithSnapshot() throws ExecutionException, InterruptedException {
         MilestoneViewModel milestoneViewModel = first();
-        while(milestoneViewModel !=null && milestoneViewModel.snapshot() == null) {
+        while(milestoneViewModel !=null && !StateDiffViewModel.exists(milestoneViewModel.getHash())) {
             milestoneViewModel = milestoneViewModel.next();
         }
         return milestoneViewModel;
     }
 
     public static MilestoneViewModel findClosestPrevMilestone(int index) throws ExecutionException, InterruptedException {
-        Object milestone = Tangle.instance().previous(Milestone.class, index).get();
+        Object milestone = Tangle.instance().previous(Milestone.class, new IntegerIndex(index)).get();
         if(milestone != null && milestone instanceof Milestone) {
             return new MilestoneViewModel((Milestone) milestone);
         }
@@ -108,7 +107,7 @@ public class MilestoneViewModel {
         if(index <= 0) {
             return first();
         }
-        Object milestone = Tangle.instance().next(Milestone.class, index).get();
+        Object milestone = Tangle.instance().next(Milestone.class, new IntegerIndex(index)).get();
         if(milestone != null && milestone instanceof Milestone) {
             return new MilestoneViewModel((Milestone) milestone);
         }
@@ -117,41 +116,25 @@ public class MilestoneViewModel {
 
     public static MilestoneViewModel latestWithSnapshot() throws ExecutionException, InterruptedException {
         MilestoneViewModel milestoneViewModel = latest();
-        while(milestoneViewModel !=null && milestoneViewModel.snapshot() == null) {
+        while(milestoneViewModel !=null && !StateDiffViewModel.exists(milestoneViewModel.getHash())) {
             milestoneViewModel = milestoneViewModel.previous();
         }
         return milestoneViewModel;
     }
 
     public boolean store() throws ExecutionException, InterruptedException {
-        return Tangle.instance().save(milestoneModel).get();
-    }
-
-    public Map<Hash, Long> snapshot() {
-        return milestoneModel.snapshot;
-    }
-
-    public void initSnapshot(Map<Hash, Long> snapshot) {
-        if(snapshot == null) {
-            milestoneModel.snapshot = new HashMap<>();
-        } else {
-            milestoneModel.snapshot = new HashMap<>(snapshot);
-        }
-    }
-
-    public void updateSnapshot() throws ExecutionException, InterruptedException {
-        Tangle.instance().update(milestoneModel, "snapshot").get();
+        return Tangle.instance().save(milestone, milestone.index).get();
     }
 
     public Hash getHash() {
-        return milestoneModel.hash;
+        return milestone.hash;
     }
     public Integer index() {
-        return milestoneModel.index;
+        return milestone.index.getValue();
     }
 
     public void delete() {
-        Tangle.instance().delete(milestoneModel);
+        Tangle.instance().delete(Milestone.class, milestone.index);
     }
 
 }

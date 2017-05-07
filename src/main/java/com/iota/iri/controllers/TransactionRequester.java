@@ -35,13 +35,6 @@ public class TransactionRequester {
         }
     }
 
-    public void rescanTransactionsToRequest() throws ExecutionException, InterruptedException {
-        Hash[] missingTx = TransactionViewModel.getMissingTransactions();
-        synchronized (this) {
-            transactionsToRequest.clear();
-            transactionsToRequest.addAll(Arrays.asList(missingTx));
-        }
-    }
     public Hash[] getRequestedTransactions() {
         synchronized (this) {
             return ArrayUtils.addAll(transactionsToRequest.stream().toArray(Hash[]::new),

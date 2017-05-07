@@ -2,17 +2,14 @@ package com.iota.iri.controllers;
 
 import java.util.*;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
-import com.iota.iri.model.Approvee;
+import com.iota.iri.model.Hashes;
 import com.iota.iri.model.Hash;
 import com.iota.iri.model.Transaction;
 import com.iota.iri.storage.Tangle;
 import com.iota.iri.utils.Converter;
 
 public class TransactionViewModel {
-    private static ExecutorService executorService = Executors.newCachedThreadPool();
 
     private final com.iota.iri.model.Transaction transaction;
 
@@ -59,13 +56,19 @@ public class TransactionViewModel {
     public static final byte[] NULL_TRANSACTION_HASH_BYTES = new byte[Hash.SIZE_IN_BYTES];
     public static final byte[] NULL_TRANSACTION_BYTES = new byte[SIZE];
 
-    private AddressViewModel address;
-    private BundleViewModel bundleViewModel;
+    private HashesViewModel address;
+    private HashesViewModel bundle;
     private TransactionViewModel trunk;
     private TransactionViewModel branch;
+    private Hash hash;
+    public Hash addressHash;
+    public Hash bundleHash;
+    public Hash trunkHash;
+    public Hash branchHash;
+    public Hash tagValue;
 
 
-    public final static int GROUP = 0; // transactions GROUP means that's it's a non-leaf node (leafs store transaction value)
+    public final static int GROUP = 0; // set GROUP means that's it's a non-leaf node (leafs store transaction value)
     public final static int PREFILLED_SLOT = 1; // means that we know only hash of the tx, the rest is unknown yet: only another tx references that hash
     public final static int FILLED_SLOT = -1; //  knows the hash only coz another tx references that hash
 
@@ -75,33 +78,27 @@ public class TransactionViewModel {
     public int weightMagnitude;
 
     public static TransactionViewModel find(byte[] hash) throws Exception {
-        Object txObject = Tangle.instance().find(Transaction.class, hash).get();
-        return new TransactionViewModel(txObject instanceof Transaction ? (Transaction) txObject : null);
+        return new TransactionViewModel((Transaction) Tangle.instance().find(Transaction.class, hash).get(), new Hash(hash));
     }
 
     public static TransactionViewModel quietFromHash(final Hash hash) {
         try {
             return fromHash(hash);
         } catch (Exception e) {
-            return new TransactionViewModel(new Transaction());
+            return new TransactionViewModel(new Transaction(), hash);
         }
     }
     public static TransactionViewModel fromHash(final Hash hash) throws Exception {
-        Transaction transaction = new Transaction(hash);
-        Tangle.instance().load(transaction).get();
-        return new TransactionViewModel(transaction);
+        return new TransactionViewModel((Transaction) Tangle.instance().load(Transaction.class, hash).get(), hash);
     }
 
     public static boolean mightExist(Hash hash) throws ExecutionException, InterruptedException {
-        return Tangle.instance().maybeHas(new Transaction(hash)).get();
+        return Tangle.instance().maybeHas(Transaction.class, hash).get();
     }
 
-    public TransactionViewModel(final Transaction transaction) {
-        if(transaction == null) {
-            this.transaction = new Transaction();
-        } else {
-            this.transaction = transaction;
-        }
+    public TransactionViewModel(final Transaction transaction, final Hash hash) {
+        this.transaction = transaction == null || transaction.bytes == null ? new Transaction(): transaction;
+        this.hash = hash == null? Hash.NULL_HASH: hash;
     }
 
     public TransactionViewModel(final int[] trits, Hash hash) {
@@ -109,7 +106,7 @@ public class TransactionViewModel {
         this.trits = new int[trits.length];
         System.arraycopy(trits, 0, this.trits, 0, trits.length);
         transaction.bytes = Converter.bytes(trits);
-        transaction.hash = hash;
+        this.hash = hash;
 
         transaction.type = FILLED_SLOT;
 
@@ -122,7 +119,7 @@ public class TransactionViewModel {
         transaction = new Transaction();
         transaction.bytes = new byte[SIZE];
         System.arraycopy(bytes, 0, transaction.bytes, 0, SIZE);
-        transaction.hash = hash;
+        this.hash = hash;
         transaction.type = FILLED_SLOT;
     }
 
@@ -130,8 +127,9 @@ public class TransactionViewModel {
         return Tangle.instance().getCount(Transaction.class).get().intValue();
     }
 
-    public void update(String item) throws Exception {
-        Tangle.instance().update(transaction, item).get();
+    public boolean update() throws Exception {
+        getBytes();
+        return Tangle.instance().save(transaction, getHash()).get();
     }
 
     public TransactionViewModel getBranchTransaction() throws Exception {
@@ -162,36 +160,55 @@ public class TransactionViewModel {
     }
 
     public void delete() throws Exception {
-        Tangle.instance().delete(transaction).get();
+        Tangle.instance().delete(Transaction.class, getHash()).get();
     }
     public boolean store() throws Exception {
         TransactionRequester.instance().clearTransactionRequest(getHash());
         if(!exists(getHash())) {
             //log.info("Tx To save Hash: " + getHash());
             getBytes();
-            getAddressHash();
-            getBundleHash();
-            getBranchTransactionHash();
-            getTrunkTransactionHash();
-            getTagValue();
+            {
+                getAddress().addHash(getHash());
+                address.store();
+            }
+            {
+                getBundle().addHash(getHash());
+                bundle.store();
+            }
+            {
+                HashesViewModel branchApproovee = HashesViewModel.load(getBranchTransactionHash());
+                branchApproovee.addHash(getHash());
+                branchApproovee.store();
+            }
+            {
+                HashesViewModel trunkApproovee = HashesViewModel.load(getTrunkTransactionHash());
+                trunkApproovee.addHash(getHash());
+                trunkApproovee.store();
+            }
+            {
+                HashesViewModel tag = getTag();
+                tag.addHash(getHash());
+                tag.store();
+            }
             TransactionRequester.instance().requestTransaction(getBranchTransactionHash(), false);
             TransactionRequester.instance().requestTransaction(getTrunkTransactionHash(), false);
-            if(getApprovers().length == 0) {
+            if(getApprovers().size() == 0) {
                 TipsViewModel.addTipHash(getHash());
             }
             TipsViewModel.removeTipHash(getBranchTransactionHash());
             TipsViewModel.removeTipHash(getTrunkTransactionHash());
-            return Tangle.instance().save(transaction).get();
+            return update();
         }
         return false;
     }
 
 
-    public Hash[] getApprovers() throws ExecutionException, InterruptedException {
-        Approvee self = new Approvee();
-        self.hash = transaction.hash;
-        Tangle.instance().load(self).get();
-        return self.transactions != null? self.transactions : new Hash[0];
+    public Set<Hash> getApprovers() throws ExecutionException, InterruptedException {
+        Hashes self = (Hashes) Tangle.instance().load(Hashes.class, hash).get();
+        if(self == null || self.set == null) {
+            return new HashSet<>();
+        }
+        return self.set;
     }
 
     public final int getType() {
@@ -214,65 +231,60 @@ public class TransactionViewModel {
     }
 
     public Hash getHash() {
-        return transaction.hash;
+        return hash;
     }
 
-    public AddressViewModel getAddress() {
-        if(address == null)
-            address = new AddressViewModel(getAddressHash());
+    public HashesViewModel getAddress() throws ExecutionException, InterruptedException {
+        if(address == null) {
+            address = HashesViewModel.load(getAddressHash());
+        }
         return address;
     }
 
-    public TagViewModel getTag() {
-        return new TagViewModel(getTagValue());
+    public HashesViewModel getTag() throws ExecutionException, InterruptedException {
+        return HashesViewModel.load(getTagValue());
     }
 
-    public BundleViewModel quietGetBundle() {
-        if(bundleViewModel == null) {
-            bundleViewModel = BundleViewModel.quietFromHash(getBundleHash());
+    public HashesViewModel getBundle() throws Exception {
+        if(bundle == null) {
+            bundle = HashesViewModel.load(getBundleHash());
         }
-        return bundleViewModel;
-    }
-    public BundleViewModel getBundle() throws Exception {
-        if(bundleViewModel == null) {
-            bundleViewModel = BundleViewModel.fromHash(getBundleHash());
-        }
-        return bundleViewModel;
+        return bundle;
     }
 
     public Hash getAddressHash() {
-        if(transaction.address.hash == null) {
-            transaction.address.hash = new Hash(Converter.bytes(trits(), ADDRESS_TRINARY_OFFSET, ADDRESS_TRINARY_SIZE));
+        if(addressHash == null) {
+            addressHash = new Hash(Converter.bytes(trits(), ADDRESS_TRINARY_OFFSET, ADDRESS_TRINARY_SIZE));
         }
-        return transaction.address.hash;
+        return addressHash;
     }
 
     public Hash getTagValue() {
-        if(transaction.tag.value == null) {
-            transaction.tag.value = new Hash(Converter.bytes(trits(), TAG_TRINARY_OFFSET, TAG_TRINARY_SIZE), 0, TAG_SIZE);
+        if(tagValue == null) {
+            tagValue = new Hash(Converter.bytes(trits(), TAG_TRINARY_OFFSET, TAG_TRINARY_SIZE), 0, TAG_SIZE);
         }
-        return transaction.tag.value;
+        return tagValue;
     }
 
     public Hash getBundleHash() {
-        if(transaction.bundle.hash == null) {
-            transaction.bundle.hash = new Hash(Converter.bytes(trits(), BUNDLE_TRINARY_OFFSET, BUNDLE_TRINARY_SIZE));
+        if(bundleHash == null) {
+            bundleHash = new Hash(Converter.bytes(trits(), BUNDLE_TRINARY_OFFSET, BUNDLE_TRINARY_SIZE));
         }
-        return transaction.bundle.hash;
+        return bundleHash;
     }
 
     public Hash getTrunkTransactionHash() {
-        if(transaction.trunk.hash == null) {
-            transaction.trunk.hash = new Hash(Converter.bytes(trits(), TRUNK_TRANSACTION_TRINARY_OFFSET, TRUNK_TRANSACTION_TRINARY_SIZE));
+        if(trunkHash == null) {
+            trunkHash = new Hash(Converter.bytes(trits(), TRUNK_TRANSACTION_TRINARY_OFFSET, TRUNK_TRANSACTION_TRINARY_SIZE));
         }
-        return transaction.trunk.hash;
+        return trunkHash;
     }
 
     public Hash getBranchTransactionHash() {
-        if(transaction.branch.hash == null) {
-            transaction.branch.hash = new Hash(Converter.bytes(trits(), BRANCH_TRANSACTION_TRINARY_OFFSET, BRANCH_TRANSACTION_TRINARY_SIZE));
+        if(branchHash == null) {
+            branchHash = new Hash(Converter.bytes(trits(), BRANCH_TRANSACTION_TRINARY_OFFSET, BRANCH_TRANSACTION_TRINARY_SIZE));
         }
-        return transaction.branch.hash;
+        return branchHash;
     }
 
     public long value() {
@@ -281,7 +293,7 @@ public class TransactionViewModel {
 
     public void setValidity(int validity) throws Exception {
         transaction.validity = validity;
-        update("validity");
+        update();
     }
 
     public int getValidity() {
@@ -323,30 +335,25 @@ public class TransactionViewModel {
     }
 
     public void setSolid() throws Exception {
-        if(transaction.solid[0] != 1) {
-            transaction.solid = new byte[]{1};
-            update("solid");
+        if(!transaction.solid) {
+            transaction.solid = true;
+            update();
         }
     }
 
     public boolean isSolid() {
-        return transaction.solid[0] == 1;
+        return transaction.solid;
     }
 
     public boolean hasSnapshot() {
-        return transaction.snapshot;
+        return transaction.confirmed;
     }
 
     public void markSnapshot(boolean marker) throws Exception {
-        if(marker ^ transaction.snapshot) {
-            transaction.snapshot = marker;
-            update("markedSnapshot");
+        if(marker ^ transaction.confirmed) {
+            transaction.confirmed = marker;
+            update();
         }
-    }
-
-    public static Hash[] getMissingTransactions() throws ExecutionException, InterruptedException {
-        return Arrays.stream(Tangle.instance()
-                .keysWithMissingReferences(Transaction.class).get()).toArray(Hash[]::new);
     }
 
     public long getHeight() {
@@ -355,7 +362,7 @@ public class TransactionViewModel {
 
     public void updateHeight(long height) throws Exception {
         transaction.height = height;
-        update("height");
+        update();
     }
 
     public long recursiveHeightUpdate() throws Exception {
@@ -371,7 +378,7 @@ public class TransactionViewModel {
             }
             if(height != 0L) {
                 transaction.height = height;
-                update("height");
+                update();
             }
         }
         return height;
@@ -401,7 +408,7 @@ public class TransactionViewModel {
 
     public void updateSender(String sender) throws Exception {
         transaction.sender = sender;
-        update("sender");
+        update();
     }
     public String getSender() {
         return transaction.sender;

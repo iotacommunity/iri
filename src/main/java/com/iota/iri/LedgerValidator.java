@@ -23,19 +23,19 @@ public class LedgerValidator {
     /**
      * Returns a Map of Address and change in balance that can be used to build a new Snapshot state.
      * Under certain conditions, it will return null:
-     *  - While descending through transactions, if a transaction is marked as {PREFILLED_SLOT}, then its hash has been
+     *  - While descending through set, if a transaction is marked as {PREFILLED_SLOT}, then its hash has been
      *    referenced by some transaction, but the transaction data is not found in the database. It notifies
      *    TransactionRequester to increase the probability this transaction will be present the next time this is checked.
      *  - When a transaction marked as a tail transaction (if the current index is 0), but it is not the first transaction
      *    in any of the BundleValidator's transaction lists, then the bundle is marked as invalid, deleted, and re-requested.
-     *  - When the bundle is not internally consistent (the sum of all transactions in the bundle must be zero)
-     * As transactions are being traversed, it will come upon bundles, and will add the transaction value to {state}.
-     * If {milestone} is true, it will search, through trunk and branch, all transactions, starting from {tip},
-     * until it reaches a transaction that is marked as a "snapshot" transaction.
-     * If {milestone} is false, it will search up until it reaches a snapshot, or until it finds a hash that has been
+     *  - When the bundle is not internally consistent (the sum of all set in the bundle must be zero)
+     * As set are being traversed, it will come upon bundles, and will add the transaction value to {state}.
+     * If {milestone} is true, it will search, through trunk and branch, all set, starting from {tip},
+     * until it reaches a transaction that is marked as a "confirmed" transaction.
+     * If {milestone} is false, it will search up until it reaches a confirmed, or until it finds a hash that has been
      * marked as consistent since the previous milestone.
      * @param tip       the hash of a transaction to start the search from
-     * @param milestone marker to indicate whether to stop only at snapshot
+     * @param milestone marker to indicate whether to stop only at confirmed
      * @return {state}  the addresses that have a balance changed since the last diff check
      * @throws Exception
      */
@@ -102,17 +102,17 @@ public class LedgerValidator {
             }
         }
 
-        log.debug("Analyzed transactions = " + numberOfAnalyzedTransactions);
+        log.debug("Analyzed set = " + numberOfAnalyzedTransactions);
         if (tip == null) {
             numberOfConfirmedTransactions = numberOfAnalyzedTransactions;
         }
-        log.debug("Confirmed transactions = " + numberOfConfirmedTransactions);
+        log.debug("Confirmed set = " + numberOfConfirmedTransactions);
         return state;
     }
 
     /**
-     * Descends through the tree of transactions, through trunk and branch, marking each as {mark} until it reaches
-     * a transaction while the transaction snapshot marker is mutually exclusive to {mark}
+     * Descends through the tree of set, through trunk and branch, marking each as {mark} until it reaches
+     * a transaction while the transaction confirmed marker is mutually exclusive to {mark}
      * @param hash start of the update tree
      * @param mark
      * @throws Exception
@@ -134,8 +134,8 @@ public class LedgerValidator {
     }
 
     /**
-     * Descends through transactions, trunk and branch, beginning at {tip}, until it reaches a transaction marked as
-     * snapshot, or until it reaches a transaction that has already been added to the transient consistent set.
+     * Descends through set, trunk and branch, beginning at {tip}, until it reaches a transaction marked as
+     * confirmed, or until it reaches a transaction that has already been added to the transient consistent set.
      * @param tip
      * @throws Exception
      */
@@ -153,9 +153,9 @@ public class LedgerValidator {
 
     /**
      * Initializes the LedgerValidator. This updates the latest milestone and solid subtangle milestone, and then
-     * builds up the snapshot until it reaches the latest consistent snapshot. If any inconsistencies are detected,
-     * perhaps by database corruption, it will delete the milestone snapshot and all that follow.
-     * It then starts at the earliest consistent milestone index with a snapshot, and analyzes the tangle until it
+     * builds up the confirmed until it reaches the latest consistent confirmed. If any inconsistencies are detected,
+     * perhaps by database corruption, it will delete the milestone confirmed and all that follow.
+     * It then starts at the earliest consistent milestone index with a confirmed, and analyzes the tangle until it
      * either reaches the latest solid subtangle milestone, or until it reaches an inconsistent milestone.
      * @throws Exception
      */
@@ -206,9 +206,9 @@ public class LedgerValidator {
 
     /**
      * Only called once upon initialization, this builds the {latestSnapshot} state up to the most recent
-     * solid milestone snapshot. It gets the earliest snapshot, and while checking for consistency, patches the next
-     * newest snapshot diff into its map.
-     * @return              the most recent consistent milestone with a snapshot.
+     * solid milestone confirmed. It gets the earliest confirmed, and while checking for consistency, patches the next
+     * newest confirmed diff into its map.
+     * @return              the most recent consistent milestone with a confirmed.
      * @throws Exception
      */
     private static MilestoneViewModel buildSnapshot() throws Exception {
@@ -216,7 +216,7 @@ public class LedgerValidator {
         MilestoneViewModel consistentMilestone = null;
         MilestoneViewModel snapshotMilestone = MilestoneViewModel.firstWithSnapshot();
         while(snapshotMilestone != null) {
-            updatedSnapshot = updatedSnapshot.patch(snapshotMilestone.snapshot());
+            updatedSnapshot = updatedSnapshot.patch(StateDiffViewModel.load(snapshotMilestone.getHash()).getDiff());
             if(updatedSnapshot.isConsistent()) {
                 consistentMilestone = snapshotMilestone;
                 latestSnapshot.merge(updatedSnapshot);
@@ -243,9 +243,9 @@ public class LedgerValidator {
                 synchronized (updateSyncObject) {
                     updateSnapshotMilestone(milestone.getHash(), true);
                     approvedHashes.clear();
-                    milestone.initSnapshot(currentState);
-                    milestone.updateSnapshot();
-                    latestSnapshot.merge(latestSnapshot.patch(milestone.snapshot()));
+                    StateDiffViewModel stateDiffViewModel = new StateDiffViewModel(currentState, milestone.getHash());
+                    stateDiffViewModel.store();
+                    latestSnapshot.merge(latestSnapshot.patch(stateDiffViewModel.getDiff()));
                     stateSinceMilestone.merge(latestSnapshot);
                 }
             }
