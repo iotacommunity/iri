@@ -48,6 +48,7 @@ public class Node {
     private final List<Neighbor> neighbors = new CopyOnWriteArrayList<>();
     private final ConcurrentSkipListSet<TransactionViewModel> broadcastQueue = weightQueue();
     private final ConcurrentSkipListSet<Triple<TransactionViewModel,Hash,Neighbor>> receiveQueue = weightQueueTriple();
+    private final ConcurrentSkipListSet<Pair<Hash,Neighbor>> replyQueue = weightQueuePair();
 
 
     private final DatagramPacket sendingPacket = new DatagramPacket(new byte[TRANSACTION_PACKET_SIZE],
@@ -56,7 +57,7 @@ public class Node {
             TRANSACTION_PACKET_SIZE);
 
     private final ThreadFactory namedThreadFactory = new ThreadFactoryBuilder().setNameFormat("Node-%d").build();
-    private final ExecutorService executor = Executors.newFixedThreadPool(Math.max(1, Runtime.getRuntime().availableProcessors() * 4),namedThreadFactory);
+    private final ExecutorService executor = Executors.newFixedThreadPool(5,namedThreadFactory);
 
     private double P_DROP_TRANSACTION;
     private static final SecureRandom rnd = new SecureRandom();
@@ -95,6 +96,8 @@ public class Node {
         executor.submit(spawnTipRequesterThread());
         executor.submit(spawnNeighborDNSRefresherThread());
         executor.submit(spawnProcessReceivedThread());
+        executor.submit(spawnReplyToRequestThread());
+
         TipsViewModel.loadTipHashes();
         executor.shutdown();
     }
@@ -225,7 +228,15 @@ public class Node {
                 Hash requestedHash = new Hash(receivedData, TransactionViewModel.SIZE, TransactionRequester.REQUEST_HASH_SIZE);
 
                 //if valid - add to queue (receivedTransactionViewModel, requestedHash, neighbor)
-                addReceivedDataToQueue(receivedTransactionViewModel, requestedHash, neighbor);
+                addReceivedDataToReceiveQueue(receivedTransactionViewModel, requestedHash, neighbor);
+
+                if (requestedHash.equals(receivedTransactionViewModel.getHash())) {
+                    //requesting a random tip
+                    requestedHash = null;
+                }
+                addReceivedDataToReplyQueue(requestedHash, neighbor);
+
+
 
             }
         }
@@ -252,7 +263,7 @@ public class Node {
         }
     }
 
-    public void addReceivedDataToQueue(TransactionViewModel receivedTransactionViewModel, Hash requestedHash, Neighbor neighbor) {
+    public void addReceivedDataToReceiveQueue(TransactionViewModel receivedTransactionViewModel, Hash requestedHash, Neighbor neighbor) {
         receiveQueue.add(new ImmutableTriple<>(receivedTransactionViewModel,requestedHash,neighbor));
         if (receiveQueue.size() > RECV_QUEUE_SIZE) {
             receiveQueue.pollLast();
@@ -260,10 +271,25 @@ public class Node {
 
     }
 
+    public void addReceivedDataToReplyQueue(Hash requestedHash, Neighbor neighbor) {
+        replyQueue.add(new ImmutablePair<>(requestedHash,neighbor));
+        if (replyQueue.size() > RECV_QUEUE_SIZE) {
+            replyQueue.pollLast();
+        }
+    }
+
+
     public void processReceivedDataFromQueue() {
-        final Triple<TransactionViewModel, Hash, Neighbor> recievedData = receiveQueue.pollFirst();
-        if (recievedData != null) {
-            processReceivedData(recievedData.getLeft(),recievedData.getMiddle(),recievedData.getRight());
+        final Triple<TransactionViewModel, Hash, Neighbor> receivedData = receiveQueue.pollFirst();
+        if (receivedData != null) {
+            processReceivedData(receivedData.getLeft(),receivedData.getMiddle(),receivedData.getRight());
+        }
+    }
+
+    public void replyToRequestFromQueue() {
+        final Pair<Hash, Neighbor> receivedData = replyQueue.pollFirst();
+        if (receivedData != null) {
+            replyToRequest(receivedData.getLeft(),receivedData.getRight());
         }
     }
 
@@ -311,6 +337,13 @@ public class Node {
             broadcast(receivedTransactionViewModel);
         }
 
+    }
+
+    public void replyToRequest(Hash requestedHash, Neighbor neighbor) {
+        //TODO implement null as random - skip LRU
+
+        TransactionViewModel transactionViewModel = null;
+        Hash transactionPointer;
 
         //retrieve requested transaction
 
@@ -342,7 +375,7 @@ public class Node {
             recentSeenRequestsHitCount.set(0L);
         }
 
-        if (requestedHash.equals(receivedTransactionViewModel.getHash())) {
+        if (requestedHash == null) {
             //Random Tip Request
             try {
                 if (TransactionRequester.instance().numberOfTransactionsToRequest() > 0) {
@@ -361,7 +394,7 @@ public class Node {
             try {
                 //transactionViewModel = TransactionViewModel.find(Arrays.copyOf(requestedHash.bytes(), TransactionRequester.REQUEST_HASH_SIZE));
                 transactionViewModel = TransactionViewModel.fromHash(new Hash(requestedHash.bytes(), 0, TransactionRequester.REQUEST_HASH_SIZE));
-                log.debug("Requested Hash: " + requestedHash + " \nFound: " + transactionViewModel.getHash());
+                //log.debug("Requested Hash: " + requestedHash + " \nFound: " + transactionViewModel.getHash());
             } catch (Exception e) {
                 log.error("Error while searching for transaction.", e);
             }
@@ -383,7 +416,6 @@ public class Node {
                 log.info("not found && not in req queue: {} from: {}", requestedHash,neighbor.getAddress());
             }
         }
-
 
     }
 
@@ -449,7 +481,7 @@ public class Node {
                     long now = System.currentTimeMillis();
                     if ((now - lastTime) > 10000L) {
                         lastTime = now;
-                        log.info("toProcess = {} , toBroadcast = {} , toRequest = {} / totalTransactions = {}", getReceiveQueueSize(), getBroadcastQueueSize() ,TransactionRequester.instance().numberOfTransactionsToRequest() , TransactionViewModel.getNumberOfStoredTransactions());
+                        log.info("toProcess = {} , toBroadcast = {} , toRequest = {} , toReply = {} / totalTransactions = {}", getReceiveQueueSize(), getBroadcastQueueSize() ,TransactionRequester.instance().numberOfTransactionsToRequest() ,getReplyQueueSize(), TransactionViewModel.getNumberOfStoredTransactions());
                     }
 
                     Thread.sleep(5000);
@@ -475,9 +507,28 @@ public class Node {
                     log.error("Process Received Data Thread Exception:", e);
                 }
             }
-            log.info("Shutting down Broadcaster Thread");
+            log.info("Shutting down Process Received Data Thread");
         };
     }
+
+    private Runnable spawnReplyToRequestThread() {
+        return () -> {
+
+            log.info("Spawning Reply To Request Thread");
+
+            while (!shuttingDown.get()) {
+
+                try {
+                    Node.instance().replyToRequestFromQueue();
+                    Thread.sleep(1);
+                } catch (final Exception e) {
+                    log.error("Reply To Request Thread Exception:", e);
+                }
+            }
+            log.info("Shutting down Reply To Request Thread");
+        };
+    }
+
 
     private static ConcurrentSkipListSet<TransactionViewModel> weightQueue() {
         return new ConcurrentSkipListSet<>((transaction1, transaction2) -> {
@@ -490,6 +541,21 @@ public class Node {
                 return 0;
             }
             return transaction2.weightMagnitude - transaction1.weightMagnitude;
+        });
+    }
+    //TODO generalize these weightQueues
+    private static ConcurrentSkipListSet<Pair<Hash,Neighbor>> weightQueuePair() {
+        return new ConcurrentSkipListSet<Pair<Hash,Neighbor>>((transaction1, transaction2) -> {
+            Hash tx1 = transaction1.getLeft();
+            Hash tx2 = transaction2.getLeft();
+
+            for (int i = Hash.SIZE_IN_BYTES; i-- > 0;) {
+                if (tx1.bytes()[i] != tx2.bytes()[i]) {
+                    return tx2.bytes()[i] - tx1.bytes()[i];
+                }
+            }
+            return 0;
+
         });
     }
 
@@ -582,6 +648,9 @@ public class Node {
         return receiveQueue.size();
     }
 
+    public int getReplyQueueSize() {
+        return replyQueue.size();
+    }
 
     public class LRUHashCache {
 
