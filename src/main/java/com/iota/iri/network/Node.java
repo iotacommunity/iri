@@ -38,6 +38,7 @@ public class Node {
     public  static final int TRANSACTION_PACKET_SIZE = 1653;
     private static final int QUEUE_SIZE = 1000;
     private static final int RECV_QUEUE_SIZE = 1000;
+    private static final int REPLY_QUEUE_SIZE = 1000;
     private static final int PAUSE_BETWEEN_TRANSACTIONS = 1;
     public  static final int REQUEST_HASH_SIZE = 49;
     private static double P_SELECT_MILESTONE;
@@ -302,7 +303,7 @@ public class Node {
 
     public void addReceivedDataToReplyQueue(Hash requestedHash, Neighbor neighbor) {
         replyQueue.add(new ImmutablePair<>(requestedHash,neighbor));
-        if (replyQueue.size() > RECV_QUEUE_SIZE) {
+        if (replyQueue.size() > REPLY_QUEUE_SIZE) {
             replyQueue.pollLast();
         }
     }
