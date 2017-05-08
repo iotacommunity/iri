@@ -23,8 +23,19 @@ public class Transaction implements Persistable {
     public String sender = "";
 
     public byte[] bytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(SIZE + Integer.BYTES * 2 + Long.BYTES * 2 + 2 + sender.getBytes().length);
-        buffer.put(bytes);
+        return bytes;
+    }
+
+    public void read(byte[] bytes) {
+        if(bytes != null) {
+            this.bytes = new byte[SIZE];
+            System.arraycopy(bytes, 0, this.bytes, 0, SIZE);
+        }
+    }
+
+    @Override
+    public byte[] metadata() {
+        ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES * 2 + Long.BYTES * 2 + 2 + sender.getBytes().length);
         buffer.put(Serializer.serialize(validity));
         buffer.put(Serializer.serialize(type));
         buffer.put(Serializer.serialize(arrivalTime));
@@ -35,12 +46,10 @@ public class Transaction implements Persistable {
         return buffer.array();
     }
 
-    public void read(byte[] bytes) {
+    @Override
+    public void readMetadata(byte[] bytes) {
         int i = 0;
         if(bytes != null) {
-            this.bytes = new byte[SIZE];
-            System.arraycopy(bytes, 0, this.bytes, 0, SIZE);
-            i += SIZE;
             validity = Serializer.getInteger(bytes, i);
             i += Integer.BYTES;
             type = Serializer.getInteger(bytes, i);

@@ -39,6 +39,7 @@ public class FileExportProvider implements PersistenceProvider {
 
     @Override
     public boolean save(Persistable model, Indexable index) throws Exception {
+        /*
         if(model instanceof Transaction) {
             Transaction transaction = ((Transaction) model);
             try {
@@ -63,6 +64,7 @@ public class FileExportProvider implements PersistenceProvider {
 
             }
         }
+        */
         return false;
     }
 
@@ -73,6 +75,33 @@ public class FileExportProvider implements PersistenceProvider {
 
     @Override
     public boolean update(Persistable model, Indexable index, String item) throws Exception {
+
+        if(model instanceof Transaction) {
+            Transaction transaction = ((Transaction) model);
+            if(item.equals("sender") || item.equals("height")) {
+                try {
+                    PrintWriter writer;
+                    Path path = Paths.get(item.equals("sender")? "export": "export-solid", String.valueOf(getFileNumber()) + ".tx");
+                    writer = new PrintWriter(path.toString(), "UTF-8");
+                    writer.println(index.toString());
+                    writer.println(Converter.trytes(trits(transaction)));
+                    writer.println(transaction.sender);
+                    if(item.equals("height")) {
+                        writer.println("Height: " + String.valueOf(transaction.height));
+                    } else {
+                        writer.println("Height: ");
+                    }
+                    writer.close();
+                    return true;
+                } catch (UnsupportedEncodingException | FileNotFoundException e) {
+                    log.error("File export failed", e);
+                } catch (Exception e) {
+                    log.error("Transaction load failed. ", e);
+                } finally {
+
+                }
+            }
+        }
         return false;
     }
 

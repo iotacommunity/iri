@@ -25,4 +25,14 @@ public class Milestone implements Persistable {
             hash = new Hash(bytes, Integer.BYTES, Hash.SIZE_IN_BYTES);
         }
     }
+
+    @Override
+    public byte[] metadata() {
+        return new byte[0];
+    }
+
+    @Override
+    public void readMetadata(byte[] bytes) {
+
+    }
 }

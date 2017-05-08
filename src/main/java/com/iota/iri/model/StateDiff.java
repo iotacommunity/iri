@@ -31,4 +31,13 @@ public class StateDiff implements Persistable {
             }
         }
     }
+
+    @Override
+    public byte[] metadata() {
+        return new byte[0];
+    }
+
+    @Override
+    public void readMetadata(byte[] bytes) {
+    }
 }

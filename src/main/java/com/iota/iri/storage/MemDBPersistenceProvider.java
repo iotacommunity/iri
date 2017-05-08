@@ -26,6 +26,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     private final Object syncObj = new Object();
 
     private final AtomicReference<Map<Class<?>, Map<Indexable, byte[]>>> classTreeMap = new AtomicReference<>();
+    private final AtomicReference<Map<Class<?>, Map<Indexable, byte[]>>> metadataReference = new AtomicReference<>();
 
     private final SecureRandom seed = new SecureRandom();
 
@@ -50,6 +51,13 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
         classMap.put(StateDiff.class, new ConcurrentHashMap<>());
         classMap.put(Hashes.class, new ConcurrentHashMap<>());
         classTreeMap.set(classMap);
+
+        Map<Class<?>, Map<Indexable, byte[]>> metadataMap = new HashMap<>();
+        metadataMap.put(Transaction.class, new ConcurrentHashMap<>());
+        metadataMap.put(Milestone.class, new TreeMap<>());
+        metadataMap.put(StateDiff.class, new ConcurrentHashMap<>());
+        metadataMap.put(Hashes.class, new ConcurrentHashMap<>());
+        metadataReference.set(metadataMap);
     }
 
     @Override
@@ -133,21 +141,21 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
     public Persistable latest(Class<?> model) throws Exception {
         Map<Indexable, byte[]> map = classTreeMap.get().get(model);
         Persistable object = (Persistable) model.newInstance();
-        byte[] result = null;
+        Map.Entry<Indexable, byte[]> result = null;
         if(map instanceof TreeMap) {
             synchronized (syncObj) {
                 if(!map.isEmpty()) {
-                    result = (byte[]) ((TreeMap) map).lastEntry().getValue();
+                    result = ((TreeMap<Indexable, byte[]>) map).lastEntry();
                 }
             }
         } else {
-            result = map.entrySet().stream().reduce((a, b) -> a.getKey().compareTo(b.getKey()) > 0 ? a:b)
-                            .map(Map.Entry::getValue).orElse(null);
+            result = map.entrySet().stream().reduce((a, b) -> a.getKey().compareTo(b.getKey()) > 0 ? a:b).orElse(null);
         }
         if(result == null) {
             object = null;
         } else {
-            object.read(result);
+            object.read(result.getValue());
+            object.readMetadata(metadataReference.get().get(model).get(result.getKey()));
         }
         return object;
     }
@@ -174,6 +182,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
                 }
             }
             object.read(bytes);
+            object.readMetadata(metadataReference.get().get(model).get(index));
         }
         return object;
     }
@@ -232,6 +241,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
                 object = null;
             } else {
                 object.read(result);
+                object.readMetadata(metadataReference.get().get(model).get(index));
             }
             return object;
         }
@@ -240,7 +250,7 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public Persistable previous(Class<?> model, Indexable index) throws Exception {
-        Map.Entry entry;
+        Map.Entry<Indexable, byte[]> entry;
         Map<Indexable, byte[]> map = classTreeMap.get().get(model);
         final Persistable object;
         if(map instanceof TreeMap) {
@@ -253,12 +263,13 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
             if (entry == null) {
                 return null;
             }
-            byte[] result = (byte[]) entry.getValue();
+            byte[] result = entry.getValue();
             if (result == null) {
                 object = null;
             } else {
                 object = (Persistable) model.newInstance();
-                object.read(result);
+                object.read(entry.getValue());
+                object.readMetadata(metadataReference.get().get(model).get(entry.getKey()));
             }
         } else {
             object = null;
@@ -272,7 +283,9 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
         Map<Indexable, byte[]> map = classTreeMap.get().get(model);
         synchronized (syncObj) {
             if(!map.isEmpty() && map instanceof TreeMap) {
-                object.read(((TreeMap<Indexable, byte[]>) map).firstEntry().getValue());
+                Map.Entry<Indexable, byte[]> entry = ((TreeMap<Indexable, byte[]>) map).firstEntry();
+                object.read(entry.getValue());
+                object.readMetadata(metadataReference.get().get(model).get(entry.getKey()));
             }
         }
         return object;
@@ -287,7 +300,8 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public boolean update(Persistable thing, Indexable index, String item) throws Exception {
-        classTreeMap.get().get(thing.getClass()).put(index, thing.bytes());
+        //classTreeMap.get().get(thing.getClass()).put(index, thing.bytes());
+        metadataReference.get().get(thing.getClass()).put(index, thing.metadata());
         return true;
     }
 

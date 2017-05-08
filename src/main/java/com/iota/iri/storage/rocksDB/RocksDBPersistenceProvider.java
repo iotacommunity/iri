@@ -26,12 +26,14 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
 
     private final String[] columnFamilyNames = new String[]{
             "transaction",
+            "transaction-metadata",
             "milestone",
             "stateDiff",
             "hashes",
     };
 
     private ColumnFamilyHandle transactionHandle;
+    private ColumnFamilyHandle transactionMetadataHandle;
     private ColumnFamilyHandle milestoneHandle;
     private ColumnFamilyHandle stateDiffHandle;
     private ColumnFamilyHandle hashesHandle;
@@ -39,7 +41,8 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
     private List<ColumnFamilyHandle> transactionGetList;
 
     private final AtomicReference<Map<Class<?>, ColumnFamilyHandle>> classTreeMap = new AtomicReference<>();
-    private final Map<Class<?>, Long> counts = new ConcurrentHashMap<>();
+    private final AtomicReference<Map<Class<?>, ColumnFamilyHandle>> metadataReference = new AtomicReference<>();
+    //private final Map<Class<?>, Long> counts = new ConcurrentHashMap<>();
 
     private final SecureRandom seed = new SecureRandom();
 
@@ -74,10 +77,16 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
         classMap.put(Hashes.class, hashesHandle);
         classTreeMap.set(classMap);
 
+        Map<Class<?>, ColumnFamilyHandle> metadataHashMap = new HashMap<>();
+        metadataHashMap.put(Transaction.class, transactionMetadataHandle);
+        metadataReference.set(metadataHashMap);
+
+        /*
         counts.put(Transaction.class, getCountEstimate(Transaction.class));
         counts.put(Milestone.class, getCountEstimate(Milestone.class));
         counts.put(StateDiff.class, getCountEstimate(StateDiff.class));
         counts.put(Hashes.class, getCountEstimate(Hashes.class));
+        */
     }
 
     @Override
@@ -87,33 +96,29 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
         bloomFilter.close();
     }
 
-    private final DoubleFunction<Object, Object> saveTransaction = (transaction, hash) ->
-            db.put(transactionHandle, ((Hash) hash).bytes(), ((Transaction) transaction).bytes());
-
-    private final DoubleFunction<Object, Object> saveMilestone = (milestone, index) ->
-            db.put(milestoneHandle, Serializer.serialize((int)index), ((Milestone) milestone).hash.bytes());
-
-    private final DoubleFunction<Object, Object> saveStateDiff = (stateDiff, hash) ->
-            db.put(stateDiffHandle, ((Hash) hash).bytes(), ((StateDiff) stateDiff).bytes());
-
-    private final DoubleFunction<Object, Object> saveHashes = (hashes, hash) ->
-            db.put(hashesHandle, ((Hash)hash).bytes(), ((Hashes) hashes).bytes());
-
     @Override
     public boolean save(Persistable thing, Indexable index) throws Exception {
         ColumnFamilyHandle handle = classTreeMap.get().get(thing.getClass());
+        /*
         if( !db.keyMayExist(handle, index.bytes(), new StringBuffer()) ) {
             counts.put(thing.getClass(), counts.get(thing.getClass()) + 1);
         }
+        */
         db.put(handle, index.bytes(), thing.bytes());
+        ColumnFamilyHandle referenceHandle = metadataReference.get().get(thing.getClass());
+        if(referenceHandle != null) {
+            db.put(referenceHandle, index.bytes(), thing.metadata());
+        }
         return true;
     }
 
     @Override
     public void delete(Class<?> model, Indexable index) throws Exception {
+        /*
         if( db.keyMayExist(classTreeMap.get().get(model), index.bytes(), new StringBuffer()) ) {
             counts.put(model, counts.get(model) + 1);
         }
+        */
         db.delete(classTreeMap.get().get(model), index.bytes());
     }
 
@@ -131,6 +136,10 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
         if(iterator.isValid()) {
             object = (Persistable) model.newInstance();
             object.read(iterator.value());
+            ColumnFamilyHandle referenceHandle = metadataReference.get().get(model);
+            if(referenceHandle != null) {
+                object.readMetadata(db.get(referenceHandle, iterator.key()));
+            }
         } else {
             object = null;
         }
@@ -156,6 +165,10 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
     public Persistable get(Class<?> model, Indexable index) throws Exception {
         Persistable object = (Persistable) model.newInstance();
         object.read(db.get(classTreeMap.get().get(model), index == null? new byte[0]: index.bytes()));
+        ColumnFamilyHandle referenceHandle = metadataReference.get().get(model);
+        if(referenceHandle != null) {
+            object.readMetadata(db.get(referenceHandle, index == null? new byte[0]: index.bytes()));
+        }
         return object;
     }
 
@@ -167,7 +180,8 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public long count(Class<?> model) throws Exception {
-        return counts.get(model);
+        return getCountEstimate(model);
+        //return counts.get(model);
     }
 
     private long getCountEstimate(Class<?> model) throws RocksDBException {
@@ -219,6 +233,10 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
         if(iterator.isValid()) {
             object = (Persistable) model.newInstance();
             object.read(iterator.value());
+            ColumnFamilyHandle referenceHandle = metadataReference.get().get(model);
+            if(referenceHandle != null) {
+                object.readMetadata(db.get(referenceHandle, iterator.key()));
+            }
         } else {
             object = null;
         }
@@ -235,6 +253,10 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
         if(iterator.isValid()) {
             object = (Persistable) model.newInstance();
             object.read(iterator.value());
+            ColumnFamilyHandle referenceHandle = metadataReference.get().get(model);
+            if(referenceHandle != null) {
+                object.readMetadata(db.get(referenceHandle, iterator.key()));
+            }
         } else {
             object = null;
         }
@@ -250,6 +272,10 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
         if(iterator.isValid()) {
             object = (Persistable) model.newInstance();
             object.read(iterator.value());
+            ColumnFamilyHandle referenceHandle = metadataReference.get().get(model);
+            if(referenceHandle != null) {
+                object.readMetadata(db.get(referenceHandle, iterator.key()));
+            }
         } else {
             object = null;
         }
@@ -283,6 +309,10 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public boolean update(Persistable thing, Indexable index, String item) throws Exception {
+        ColumnFamilyHandle referenceHandle = metadataReference.get().get(thing.getClass());
+        if(referenceHandle != null) {
+            db.put(referenceHandle, index.bytes(), thing.metadata());
+        }
         return false;
     }
 
@@ -386,6 +416,7 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
     private void fillmodelColumnHandles(List<ColumnFamilyHandle> familyHandles) throws Exception {
         int i = 0;
         transactionHandle = familyHandles.get(++i);
+        transactionMetadataHandle = familyHandles.get(++i);
         milestoneHandle = familyHandles.get(++i);
         stateDiffHandle = familyHandles.get(++i);
         hashesHandle = familyHandles.get(++i);
