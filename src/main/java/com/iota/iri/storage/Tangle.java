@@ -45,6 +45,17 @@ public class Tangle {
             return out;
     }
 
+    public Boolean saveBatch(Map<Indexable, Persistable> models) throws Exception {
+        boolean exists = false;
+        for(PersistenceProvider provider: persistenceProviders) {
+            if(exists) {
+                provider.saveBatch(models);
+            } else {
+                exists = provider.saveBatch(models);
+            }
+        }
+        return exists;
+    }
     public Boolean save(Persistable model, Indexable index) throws Exception {
             boolean exists = false;
             for(PersistenceProvider provider: persistenceProviders) {
@@ -175,6 +186,7 @@ public class Tangle {
             return latest;
     }
 
+    /*
     public boolean merge(Persistable model, Indexable index) throws Exception {
         boolean exists = false;
         for(PersistenceProvider provider: persistenceProviders) {
@@ -186,4 +198,5 @@ public class Tangle {
         }
         return exists;
     }
+    */
 }

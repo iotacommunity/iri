@@ -35,4 +35,9 @@ public class Milestone implements Persistable {
     public void readMetadata(byte[] bytes) {
 
     }
+
+    @Override
+    public boolean merge() {
+        return false;
+    }
 }

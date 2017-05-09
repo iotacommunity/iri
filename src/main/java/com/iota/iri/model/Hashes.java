@@ -38,4 +38,9 @@ public class Hashes implements Persistable {
     public void readMetadata(byte[] bytes) {
 
     }
+
+    @Override
+    public boolean merge() {
+        return true;
+    }
 }

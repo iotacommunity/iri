@@ -30,11 +30,12 @@ public class TransactionViewModelTest {
     public static void setUp() throws Exception {
         dbFolder.create();
         logFolder.create();
-        //Configuration.put(Configuration.DefaultConfSettings.DB_PATH, dbFolder.getRoot().getAbsolutePath());
-        Configuration.put(Configuration.DefaultConfSettings.DB_PATH, "./writeheretestpath");
-        //Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, logFolder.getRoot().getAbsolutePath());
-        Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, "./logloggoaway");
+        Configuration.put(Configuration.DefaultConfSettings.DB_PATH, dbFolder.getRoot().getAbsolutePath());
+        //Configuration.put(Configuration.DefaultConfSettings.DB_PATH, "./writeheretestpath");
+        Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, logFolder.getRoot().getAbsolutePath());
+        //Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, "./logloggoaway");
         Tangle.instance().addPersistenceProvider(RocksDBPersistenceProviderTest.rocksDBPersistenceProvider);
+        //Tangle.instance().addPersistenceProvider(new MemDBPersistenceProvider());
         Tangle.instance().init();
     }
 
@@ -343,8 +344,8 @@ public class TransactionViewModelTest {
         Hash hash;
         hash = getRandomTransactionHash();
         hashes.add(hash);
-        j = hashes.size();
         long start, diff, diffget;
+        long sumdiff=0,maxdiff=0;
         new TransactionViewModel(getRandomTransactionWithTrunkAndBranch(Hash.NULL_HASH, Hash.NULL_HASH), hash).store();
         TransactionViewModel transactionViewModel;
         for (i = 0; i++ < 1000000;) {
@@ -354,12 +355,18 @@ public class TransactionViewModelTest {
             start = System.nanoTime();
             transactionViewModel.store();
             diff = System.nanoTime() - start;
+            sumdiff += diff;
+            if (diff>maxdiff) {
+                maxdiff = diff;
+            }
             hash = hashes.get(seed.nextInt(j));
             start = System.nanoTime();
             TransactionViewModel.fromHash(hash);
             diffget = System.nanoTime() - start;
             if(i % 10000 == 0) {
-                System.out.println("Save time for index "+ i+":\t" + (diff / 1000) + " us.\tGet time:\t" + (diffget/1000) + " us.");
+                System.out.println("Save time for index "+ i+":\t" + (diff / 1000) + " us.\tGet time: " + (diffget/1000) + " us.,\tMax time: " + (maxdiff/ 1000)+ "us.\tAverage save time: " + (sumdiff / 10000 / 1000) + " us");
+                sumdiff = 0;
+                maxdiff = 0;
             }
             hashes.add(hash);
         }

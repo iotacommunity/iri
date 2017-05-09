@@ -12,6 +12,7 @@ import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Map;
 import java.util.Set;
 
 import static com.iota.iri.controllers.TransactionViewModel.TRINARY_SIZE;
@@ -160,8 +161,12 @@ public class FileExportProvider implements PersistenceProvider {
         return null;
     }
 
-    @Override
     public boolean merge(Persistable model, Indexable index) throws Exception {
+        return false;
+    }
+
+    @Override
+    public boolean saveBatch(Map<Indexable, Persistable> models) throws Exception {
         return false;
     }
 

@@ -7,6 +7,8 @@ import java.util.stream.Collectors;
 import com.iota.iri.model.Hashes;
 import com.iota.iri.model.Hash;
 import com.iota.iri.model.Transaction;
+import com.iota.iri.storage.Indexable;
+import com.iota.iri.storage.Persistable;
 import com.iota.iri.storage.Tangle;
 import com.iota.iri.utils.Converter;
 
@@ -169,7 +171,7 @@ public class TransactionViewModel {
             //log.info("Tx To save Hash: " + getHash());
             getBytes();
 
-            storeHashes(Arrays.asList(getAddressHash(), getBundleHash(),
+            Map<Indexable, Persistable> hashesMap = storeHashes(Arrays.asList(getAddressHash(), getBundleHash(),
                     getBranchTransactionHash(), getTrunkTransactionHash(), getTagValue()));
             TransactionRequester.instance().requestTransaction(getBranchTransactionHash(), false);
             TransactionRequester.instance().requestTransaction(getTrunkTransactionHash(), false);
@@ -179,15 +181,19 @@ public class TransactionViewModel {
             TipsViewModel.removeTipHash(getBranchTransactionHash());
             TipsViewModel.removeTipHash(getTrunkTransactionHash());
             getBytes();
-            return Tangle.instance().save(transaction, getHash());
+            hashesMap.put(getHash(), transaction);
+            return Tangle.instance().saveBatch(hashesMap);
         }
         return false;
     }
 
-    private void storeHashes(Collection<Hash> hashesToSave) throws Exception {
+    private Map<Indexable, Persistable> storeHashes(Collection<Hash> hashesToSave) throws Exception {
+        Map<Indexable, Persistable> map = new HashMap<>();
         for(Hash hash: hashesToSave) {
-            HashesViewModel.merge(hash, getHash());
+            Map.Entry<Indexable, Persistable> entry = HashesViewModel.getEntry(hash, getHash());
+            map.put(entry.getKey(), entry.getValue());
         }
+        return map;
     }
 
     public Set<Hash> getApprovers() throws Exception {

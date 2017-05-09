@@ -69,4 +69,9 @@ public class Transaction implements Persistable {
             sender = new String(senderBytes);
         }
     }
+
+    @Override
+    public boolean merge() {
+        return false;
+    }
 }

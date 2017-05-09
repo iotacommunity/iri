@@ -10,4 +10,5 @@ public interface Persistable extends Serializable {
     void read(byte[] bytes);
     byte[] metadata();
     void readMetadata(byte[] bytes);
+    boolean merge();
 }

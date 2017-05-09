@@ -2,12 +2,11 @@ package com.iota.iri.controllers;
 
 import com.iota.iri.model.Hashes;
 import com.iota.iri.model.Hash;
+import com.iota.iri.storage.Indexable;
+import com.iota.iri.storage.Persistable;
 import com.iota.iri.storage.Tangle;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 /**
@@ -30,11 +29,19 @@ public class HashesViewModel {
         return new HashesViewModel((Hashes) Tangle.instance().load(Hashes.class, hash), hash);
     }
 
+    public static Map.Entry<Indexable, Persistable> getEntry(Hash hash, Hash hashToMerge) throws Exception {
+        Hashes hashes = new Hashes();
+        hashes.set = new HashSet<>(Collections.singleton(hashToMerge));
+        return new HashMap.SimpleEntry<>(hash, hashes);
+    }
+
+    /*
     public static boolean merge(Hash hash, Hash hashToMerge) throws Exception {
         Hashes hashes = new Hashes();
         hashes.set = new HashSet<>(Collections.singleton(hashToMerge));
         return Tangle.instance().merge(hashes, hash);
     }
+    */
 
     public boolean store() throws Exception {
         return Tangle.instance().save(self, hash);

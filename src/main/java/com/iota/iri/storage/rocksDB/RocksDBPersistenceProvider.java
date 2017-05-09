@@ -10,6 +10,9 @@ import org.apache.commons.lang3.SystemUtils;
 import org.rocksdb.*;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -283,12 +286,32 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
         return object;
     }
 
-    @Override
     public boolean merge(Persistable model, Indexable index) throws Exception {
         boolean exists = mayExist(model.getClass(), index);
         db.merge(classTreeMap.get().get(model.getClass()), index.bytes(), model.bytes());
-        byte[] now = db.get(classTreeMap.get().get(model.getClass()), index.bytes());
         return exists;
+    }
+
+    @Override
+    public boolean saveBatch(Map<Indexable, Persistable> models) throws Exception {
+        WriteBatch writeBatch = new WriteBatch();
+        WriteOptions writeOptions = new WriteOptions();
+        for(Map.Entry<Indexable, Persistable> entry: models.entrySet()) {
+            ColumnFamilyHandle handle = classTreeMap.get().get(entry.getValue().getClass());
+            ColumnFamilyHandle referenceHandle = metadataReference.get().get(entry.getValue().getClass());
+            if(entry.getValue().merge()) {
+                writeBatch.merge(handle, entry.getKey().bytes(), entry.getValue().bytes());
+            } else {
+                writeBatch.put(handle, entry.getKey().bytes(), entry.getValue().bytes());
+            }
+            if(referenceHandle != null) {
+                writeBatch.put(referenceHandle, entry.getKey().bytes(), entry.getValue().metadata());
+            }
+        }
+        db.write(writeOptions, writeBatch);
+        writeBatch.close();
+        writeOptions.close();
+        return true;
     }
 
     private void flushHandle(ColumnFamilyHandle handle) throws RocksDBException {
@@ -366,6 +389,10 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
         Thread.yield();
         bloomFilter = new BloomFilter(BLOOM_FILTER_BITS_PER_KEY);
         BlockBasedTableConfig blockBasedTableConfig = new BlockBasedTableConfig().setFilter(bloomFilter);
+        File pathToLogDir = Paths.get(logPath).toFile();
+        if(!pathToLogDir.exists() || !pathToLogDir.isDirectory()) {
+            pathToLogDir.mkdir();
+        }
         options = new DBOptions()
                 .setCreateIfMissing(true)
                 .setCreateMissingColumnFamilies(true)

@@ -40,4 +40,9 @@ public class StateDiff implements Persistable {
     @Override
     public void readMetadata(byte[] bytes) {
     }
+
+    @Override
+    public boolean merge() {
+        return false;
+    }
 }

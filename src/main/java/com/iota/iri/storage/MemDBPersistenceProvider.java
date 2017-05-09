@@ -46,17 +46,17 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     private void initClassTreeMap() {
         Map<Class<?>, Map<Indexable, byte[]>> classMap = new HashMap<>();
-        classMap.put(Transaction.class, new ConcurrentHashMap<>());
+        classMap.put(Transaction.class, new ConcurrentHashMap<>(10000000));
         classMap.put(Milestone.class, new TreeMap<>());
-        classMap.put(StateDiff.class, new ConcurrentHashMap<>());
-        classMap.put(Hashes.class, new ConcurrentHashMap<>());
+        classMap.put(StateDiff.class, new ConcurrentHashMap<>(10000000));
+        classMap.put(Hashes.class, new ConcurrentHashMap<>(10000000));
         classTreeMap.set(classMap);
 
         Map<Class<?>, Map<Indexable, byte[]>> metadataMap = new HashMap<>();
-        metadataMap.put(Transaction.class, new ConcurrentHashMap<>());
+        metadataMap.put(Transaction.class, new ConcurrentHashMap<>(10000000));
         metadataMap.put(Milestone.class, new TreeMap<>());
-        metadataMap.put(StateDiff.class, new ConcurrentHashMap<>());
-        metadataMap.put(Hashes.class, new ConcurrentHashMap<>());
+        metadataMap.put(StateDiff.class, new ConcurrentHashMap<>(10000000));
+        metadataMap.put(Hashes.class, new ConcurrentHashMap<>(10000000));
         metadataReference.set(metadataMap);
     }
 
@@ -99,8 +99,12 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
 
     @Override
     public boolean save(Persistable thing, Indexable index) throws Exception {
-        classTreeMap.get().get(thing.getClass()).put(index, thing.bytes());
-        //saveMap.get(thing.getClass()).apply(thing, index);
+        if(thing.merge()) {
+            merge(thing, index);
+        } else {
+            classTreeMap.get().get(thing.getClass()).put(index, thing.bytes());
+        }
+        metadataReference.get().get(thing.getClass()).put(index, thing.metadata());
         return true;
     }
 
@@ -291,11 +295,18 @@ public class MemDBPersistenceProvider implements PersistenceProvider {
         return object;
     }
 
-    @Override
     public boolean merge(Persistable model, Indexable index) throws Exception {
         byte[] current = classTreeMap.get().get(model.getClass()).get(index);
         classTreeMap.get().get(model.getClass()).put(index, ArrayUtils.addAll(current == null? new byte[0]: ArrayUtils.add(current, (byte)44), model.bytes()));
         return current != null;
+    }
+
+    @Override
+    public boolean saveBatch(Map<Indexable, Persistable> models) throws Exception {
+        for(Map.Entry<Indexable, Persistable> entry: models.entrySet()) {
+            save(entry.getValue(), entry.getKey());
+        }
+        return true;
     }
 
     @Override
