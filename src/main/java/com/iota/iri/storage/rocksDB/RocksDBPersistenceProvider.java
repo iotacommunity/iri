@@ -8,6 +8,7 @@ import com.iota.iri.storage.PersistenceProvider;
 import com.iota.iri.utils.Serializer;
 import org.apache.commons.lang3.SystemUtils;
 import org.rocksdb.*;
+import org.rocksdb.util.SizeUnit;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
@@ -27,13 +28,14 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
     private static final org.slf4j.Logger log = LoggerFactory.getLogger(RocksDBPersistenceProvider.class);
     private static final int BLOOM_FILTER_BITS_PER_KEY = 10;
 
-    private final String[] columnFamilyNames = new String[]{
+    private final List<String> columnFamilyNames = Arrays.asList(
+            new String(RocksDB.DEFAULT_COLUMN_FAMILY),
             "transaction",
             "transaction-metadata",
             "milestone",
             "stateDiff",
-            "hashes",
-    };
+            "hashes"
+    );
 
     private ColumnFamilyHandle transactionHandle;
     private ColumnFamilyHandle transactionMetadataHandle;
@@ -374,7 +376,6 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
     }
 
     private void initDB(String path, String logPath) throws Exception {
-        MergeOperator myOperator = new StringAppendOperator();
         try {
             RocksDB.loadLibrary();
         } catch(Exception e) {
@@ -387,58 +388,83 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
             throw e;
         }
         Thread.yield();
-        bloomFilter = new BloomFilter(BLOOM_FILTER_BITS_PER_KEY);
-        BlockBasedTableConfig blockBasedTableConfig = new BlockBasedTableConfig().setFilter(bloomFilter);
+
         File pathToLogDir = Paths.get(logPath).toFile();
         if(!pathToLogDir.exists() || !pathToLogDir.isDirectory()) {
             pathToLogDir.mkdir();
         }
+
+        /*
+        RocksEnv.getDefault().setBackgroundThreads(Runtime.getRuntime().availableProcessors())
+                .setBackgroundThreads(Runtime.getRuntime().availableProcessors(), RocksEnv.FLUSH_POOL)
+                .setBackgroundThreads(Runtime.getRuntime().availableProcessors(), RocksEnv.COMPACTION_POOL);
+        */
+
         options = new DBOptions()
                 .setCreateIfMissing(true)
                 .setCreateMissingColumnFamilies(true)
-                .setDbLogDir(logPath);
+                .setDbLogDir(logPath)
+                .setMaxLogFileSize(2 * SizeUnit.MB)
+                .setMaxManifestFileSize(2 * SizeUnit.MB)
+                .setMaxOpenFiles(-1)
+                .setMaxBackgroundCompactions(1)
+                .setBytesPerSync(64 * SizeUnit.KB)
+                .setMaxTotalWalSize(2 * SizeUnit.MB)
+                /*
+                */
+        ;
+        options.setMaxSubcompactions(Runtime.getRuntime().availableProcessors());
+
+        bloomFilter = new BloomFilter(BLOOM_FILTER_BITS_PER_KEY);
+        PlainTableConfig plainTableConfig = new PlainTableConfig();
+        BlockBasedTableConfig blockBasedTableConfig = new BlockBasedTableConfig().setFilter(bloomFilter);
+        blockBasedTableConfig
+                .setBlockCacheSize(2 * SizeUnit.MB)
+                .setFilter(bloomFilter)
+                /*
+                .setCacheNumShardBits(9)
+                .setBlockSizeDeviation(20)
+                .setBlockRestartInterval(32)
+                .setCacheIndexAndFilterBlocks(true)
+                .setHashIndexAllowCollision(true)
+                .setBlockCacheCompressedSize(160 * SizeUnit.KB)
+                .setBlockCacheCompressedNumShardBits(10)
+                */
+                ;
+        options.setAllowConcurrentMemtableWrite(true);
+
+        MemTableConfig hashSkipListMemTableConfig = new HashSkipListMemTableConfig()
+                .setHeight(4)
+                .setBranchingFactor(4)
+                .setBucketCount(2000000);
+        MemTableConfig hashLinkedListMemTableConfig = new HashLinkedListMemTableConfig().setBucketCount(100000);
+        MemTableConfig vectorTableConfig = new VectorMemTableConfig().setReservedSize(10000);
+        MemTableConfig skipListMemTableConfig = new SkipListMemTableConfig();
+
+
+        MergeOperator mergeOperator = new StringAppendOperator();
+        ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions()
+                .setMergeOperator(mergeOperator)
+                .setTableFormatConfig(blockBasedTableConfig)
+                /*
+                .setMaxWriteBufferNumber(64)
+                .setCompactionStyle(CompactionStyle.UNIVERSAL)
+                .setCompressionType(CompressionType.SNAPPY_COMPRESSION)
+                .setWriteBufferSize(64 * SizeUnit.MB)
+                */
+                ;
+        //columnFamilyOptions.setMemTableConfig(hashSkipListMemTableConfig);
 
         List<ColumnFamilyHandle> familyHandles = new ArrayList<>();
-        List<ColumnFamilyDescriptor> familyDescriptors = Arrays.stream(columnFamilyNames)
-                .map(name -> new ColumnFamilyDescriptor(name.getBytes(),
-                        new ColumnFamilyOptions()
-                                .setMergeOperator(myOperator).setTableFormatConfig(blockBasedTableConfig))).collect(Collectors.toList());
+        //List<ColumnFamilyDescriptor> familyDescriptors = columnFamilyNames.stream().map(name -> new ColumnFamilyDescriptor(name.getBytes(), columnFamilyOptions)).collect(Collectors.toList());
+        //familyDescriptors.add(0, new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, new ColumnFamilyOptions()));
 
-        familyDescriptors.add(0, new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, new ColumnFamilyOptions()));
-
-        db = RocksDB.open(options, path, familyDescriptors, familyHandles);
+        db = RocksDB.open(options, path, columnFamilyNames.stream().map(name -> new ColumnFamilyDescriptor(name.getBytes(), columnFamilyOptions)).collect(Collectors.toList()), familyHandles);
         db.enableFileDeletions(true);
 
         fillmodelColumnHandles(familyHandles);
     }
 
-    private void fillMissingColumns(List<ColumnFamilyDescriptor> familyDescriptors, List<ColumnFamilyHandle> familyHandles, String path) throws Exception {
-        List<ColumnFamilyDescriptor> columnFamilies = RocksDB.listColumnFamilies(new Options().setCreateIfMissing(true), path)
-                .stream()
-                .map(b -> new ColumnFamilyDescriptor(b, new ColumnFamilyOptions()))
-                .collect(Collectors.toList());
-        columnFamilies.add(0, familyDescriptors.get(0));
-        List<ColumnFamilyDescriptor> missingFromDatabase = familyDescriptors.stream().filter(d -> columnFamilies.stream().filter(desc -> new String(desc.columnFamilyName()).equals(new String(d.columnFamilyName()))).toArray().length == 0).collect(Collectors.toList());
-        List<ColumnFamilyDescriptor> missingFromDescription = columnFamilies.stream().filter(d -> familyDescriptors.stream().filter(desc -> new String(desc.columnFamilyName()).equals(new String(d.columnFamilyName()))).toArray().length == 0).collect(Collectors.toList());
-        if (missingFromDatabase.size() != 0) {
-            missingFromDatabase.remove(familyDescriptors.get(0));
-            db = RocksDB.open(options, path, columnFamilies, familyHandles);
-            for (ColumnFamilyDescriptor description : missingFromDatabase) {
-                addColumnFamily(description.columnFamilyName(), db);
-            }
-            db.close();
-        }
-        if (missingFromDescription.size() != 0) {
-            missingFromDescription.forEach(familyDescriptors::add);
-        }
-    }
-
-    private void addColumnFamily(byte[] familyName, RocksDB db) throws RocksDBException {
-        final ColumnFamilyHandle columnFamilyHandle = db.createColumnFamily(
-                new ColumnFamilyDescriptor(familyName,
-                        new ColumnFamilyOptions()));
-        assert (columnFamilyHandle != null);
-    }
 
     private void fillmodelColumnHandles(List<ColumnFamilyHandle> familyHandles) throws Exception {
         int i = 0;
@@ -478,3 +504,33 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
         R run() throws Exception;
     }
 }
+/*
+    private void fillMissingColumns(List<ColumnFamilyDescriptor> familyDescriptors, List<ColumnFamilyHandle> familyHandles, String path) throws Exception {
+        List<ColumnFamilyDescriptor> columnFamilies = RocksDB.listColumnFamilies(new Options().setCreateIfMissing(true), path)
+                .stream()
+                .map(b -> new ColumnFamilyDescriptor(b, new ColumnFamilyOptions()))
+                .collect(Collectors.toList());
+        columnFamilies.add(0, familyDescriptors.get(0));
+        List<ColumnFamilyDescriptor> missingFromDatabase = familyDescriptors.stream().filter(d -> columnFamilies.stream().filter(desc -> new String(desc.columnFamilyName()).equals(new String(d.columnFamilyName()))).toArray().length == 0).collect(Collectors.toList());
+        List<ColumnFamilyDescriptor> missingFromDescription = columnFamilies.stream().filter(d -> familyDescriptors.stream().filter(desc -> new String(desc.columnFamilyName()).equals(new String(d.columnFamilyName()))).toArray().length == 0).collect(Collectors.toList());
+        if (missingFromDatabase.size() != 0) {
+            missingFromDatabase.remove(familyDescriptors.get(0));
+            db = RocksDB.open(options, path, columnFamilies, familyHandles);
+            for (ColumnFamilyDescriptor description : missingFromDatabase) {
+                addColumnFamily(description.columnFamilyName(), db);
+            }
+            db.close();
+        }
+        if (missingFromDescription.size() != 0) {
+            missingFromDescription.forEach(familyDescriptors::add);
+        }
+    }
+
+    private void addColumnFamily(byte[] familyName, RocksDB db) throws RocksDBException {
+        final ColumnFamilyHandle columnFamilyHandle = db.createColumnFamily(
+                new ColumnFamilyDescriptor(familyName,
+                        new ColumnFamilyOptions()));
+        assert (columnFamilyHandle != null);
+    }
+
+ */

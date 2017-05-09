@@ -11,6 +11,8 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.junit.*;
 import org.junit.rules.TemporaryFolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
@@ -23,6 +25,7 @@ public class TransactionViewModelTest {
 
     private static final TemporaryFolder dbFolder = new TemporaryFolder();
     private static final TemporaryFolder logFolder = new TemporaryFolder();
+    Logger log = LoggerFactory.getLogger(TransactionViewModelTest.class);
 
     private static final Random seed = new Random();
 
@@ -30,10 +33,10 @@ public class TransactionViewModelTest {
     public static void setUp() throws Exception {
         dbFolder.create();
         logFolder.create();
-        Configuration.put(Configuration.DefaultConfSettings.DB_PATH, dbFolder.getRoot().getAbsolutePath());
-        //Configuration.put(Configuration.DefaultConfSettings.DB_PATH, "./writeheretestpath");
-        Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, logFolder.getRoot().getAbsolutePath());
-        //Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, "./logloggoaway");
+        Configuration.put(Configuration.DefaultConfSettings.DB_PATH, "./tvmtestdb");
+        Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, "./tvmtestdbl");
+        //Configuration.put(Configuration.DefaultConfSettings.DB_PATH, dbFolder.getRoot().getAbsolutePath());
+        //Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, logFolder.getRoot().getAbsolutePath());
         Tangle.instance().addPersistenceProvider(RocksDBPersistenceProviderTest.rocksDBPersistenceProvider);
         //Tangle.instance().addPersistenceProvider(new MemDBPersistenceProvider());
         Tangle.instance().init();
@@ -345,17 +348,21 @@ public class TransactionViewModelTest {
         hash = getRandomTransactionHash();
         hashes.add(hash);
         long start, diff, diffget;
-        long sumdiff=0,maxdiff=0;
+        long subSumDiff=0,maxdiff=0, sumdiff = 0;
+        int max = 990 * 1000;
+        int interval = 10000;
+        int interval1 = 500;
+        log.info("Starting Test. #TX: {}", TransactionViewModel.getNumberOfStoredTransactions());
         new TransactionViewModel(getRandomTransactionWithTrunkAndBranch(Hash.NULL_HASH, Hash.NULL_HASH), hash).store();
         TransactionViewModel transactionViewModel;
-        for (i = 0; i++ < 1000000;) {
+        for (i = 0; i++ < max;) {
             hash = getRandomTransactionHash();
             j = hashes.size();
             transactionViewModel = new TransactionViewModel(getRandomTransactionWithTrunkAndBranch(hashes.get(seed.nextInt(j)), hashes.get(seed.nextInt(j))), hash);
             start = System.nanoTime();
             transactionViewModel.store();
             diff = System.nanoTime() - start;
-            sumdiff += diff;
+            subSumDiff += diff;
             if (diff>maxdiff) {
                 maxdiff = diff;
             }
@@ -363,13 +370,20 @@ public class TransactionViewModelTest {
             start = System.nanoTime();
             TransactionViewModel.fromHash(hash);
             diffget = System.nanoTime() - start;
-            if(i % 10000 == 0) {
-                System.out.println("Save time for index "+ i+":\t" + (diff / 1000) + " us.\tGet time: " + (diffget/1000) + " us.,\tMax time: " + (maxdiff/ 1000)+ "us.\tAverage save time: " + (sumdiff / 10000 / 1000) + " us");
+            if(i % interval1 == 0) {
+                //log.info("{}", new String(new char[(int) (diff / 50000)]).replace('\0', '-'));
+                log.info("{}", new String(new char[(int) ((subSumDiff / interval1 / 20000))]).replace('\0', '|'));
+                sumdiff += subSumDiff;
+                subSumDiff = 0;
+            }
+            if(i % interval == 0) {
+                log.info("Save time for {}: {} ms.\tGet Time: {} us.\tMax time: {} ms. Average: {}", i, (diff / 1000000.0) , diffget/1000, (maxdiff/ 1000000.0), sumdiff/interval/1000);
                 sumdiff = 0;
                 maxdiff = 0;
             }
             hashes.add(hash);
         }
+        log.info("Done. #TX: {}", TransactionViewModel.getNumberOfStoredTransactions());
     }
 
     private Transaction getRandomTransaction(Random seed) {
