@@ -12,6 +12,7 @@ import org.rocksdb.*;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -683,6 +684,7 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
         Thread.yield();
         bloomFilter = new BloomFilter(BLOOM_FILTER_BITS_PER_KEY);
         BlockBasedTableConfig blockBasedTableConfig = new BlockBasedTableConfig().setFilter(bloomFilter);
+        Paths.get(logPath).toFile().mkdir();
         options = new DBOptions()
                 .setCreateIfMissing(true)
                 .setCreateMissingColumnFamilies(true)

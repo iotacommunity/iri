@@ -10,11 +10,11 @@ import com.iota.iri.storage.Tangle;
 import com.iota.iri.storage.rocksDB.RocksDBPersistenceProviderTest;
 import com.iota.iri.utils.Converter;
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.SystemUtils;
 import org.junit.*;
 import org.junit.rules.TemporaryFolder;
 
-import java.util.Arrays;
-import java.util.Random;
+import java.util.*;
 
 import static org.junit.Assert.*;
 
@@ -32,8 +32,10 @@ public class TransactionViewModelTest {
     public static void setUp() throws Exception {
         dbFolder.create();
         logFolder.create();
-        Configuration.put(Configuration.DefaultConfSettings.DB_PATH, dbFolder.getRoot().getAbsolutePath());
-        Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, logFolder.getRoot().getAbsolutePath());
+        //Configuration.put(Configuration.DefaultConfSettings.DB_PATH, dbFolder.getRoot().getAbsolutePath());
+        Configuration.put(Configuration.DefaultConfSettings.DB_PATH, "./writeheretestpath");
+        //Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, logFolder.getRoot().getAbsolutePath());
+        Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, "./logloggoaway");
         Tangle.instance().addPersistenceProvider(RocksDBPersistenceProviderTest.rocksDBPersistenceProvider);
         Tangle.instance().init();
     }
@@ -41,7 +43,7 @@ public class TransactionViewModelTest {
     @AfterClass
     public static void tearDown() throws Exception {
         Tangle.instance().shutdown();
-        dbFolder.delete();
+        //dbFolder.delete();
     }
 
     @Test
@@ -408,6 +410,35 @@ public class TransactionViewModelTest {
         transactionViewModel.store();
         Hash hash = transactionViewModelNoSave.getHash();
         Assert.assertFalse(Arrays.equals(TransactionViewModel.find(Arrays.copyOf(hash.bytes(), TransactionRequester.REQUEST_HASH_SIZE)).getBytes(), transactionViewModel.getBytes()));
+    }
+
+    //@Test
+    public void testManyTXInDB() throws Exception {
+        int i, j;
+        List<Hash> hashes = new ArrayList<>();
+        Hash hash;
+        hash = getRandomTransactionHash();
+        hashes.add(hash);
+        j = hashes.size();
+        long start, diff, diffget;
+        new TransactionViewModel(getRandomTransactionWithTrunkAndBranch(Hash.NULL_HASH, Hash.NULL_HASH), hash).store();
+        TransactionViewModel transactionViewModel;
+        for (i = 0; i++ < 1000000;) {
+            hash = getRandomTransactionHash();
+            j = hashes.size();
+            transactionViewModel = new TransactionViewModel(getRandomTransactionWithTrunkAndBranch(hashes.get(seed.nextInt(j)), hashes.get(seed.nextInt(j))), hash);
+            start = System.nanoTime();
+            transactionViewModel.store();
+            diff = System.nanoTime() - start;
+            hash = hashes.get(seed.nextInt(j));
+            start = System.nanoTime();
+            TransactionViewModel.fromHash(hash);
+            diffget = System.nanoTime() - start;
+            if(i % 10000 == 0) {
+                System.out.println("Save time for index "+ i+":\t" + (diff / 1000) + " us.\tGet time:\t" + (diffget/1000) + " us.");
+            }
+            hashes.add(hash);
+        }
     }
 
     private Transaction getRandomTransaction(Random seed) {
