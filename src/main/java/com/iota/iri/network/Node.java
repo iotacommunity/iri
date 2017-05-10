@@ -329,6 +329,12 @@ public class Node {
         if(stored) {
             receivedTransactionViewModel.setArrivalTime(System.currentTimeMillis());
             try {
+                TransactionRequester.instance().clearTransactionRequest(receivedTransactionViewModel.getHash());
+                TransactionRequester.instance().requestTransaction(receivedTransactionViewModel.getBranchTransactionHash(), false);
+                TransactionRequester.instance().requestTransaction(receivedTransactionViewModel.getTrunkTransactionHash(), false);
+                if(receivedTransactionViewModel.getApprovers().size() == 0) {
+                    TipsViewModel.addTipHash(receivedTransactionViewModel.getHash());
+                }
                 receivedTransactionViewModel.update("arrivalTime");
                 receivedTransactionViewModel.updateSender(neighbor.getAddress().toString());
 

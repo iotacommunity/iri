@@ -57,7 +57,7 @@ public class TransactionRequester {
         return transactionsToRequest.size() + milestoneTransactionsToRequest.size();
     }
 
-    boolean clearTransactionRequest(Hash hash) {
+    public boolean clearTransactionRequest(Hash hash) {
         synchronized (syncObj) {
             boolean milestone = milestoneTransactionsToRequest.remove(hash);
             boolean normal = transactionsToRequest.remove(hash);

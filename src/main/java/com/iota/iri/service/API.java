@@ -291,7 +291,7 @@ public class API {
     }
 
     private AbstractResponse getTipsStatement() throws ExecutionException, InterruptedException {
-        return GetTipsResponse.create(Arrays.stream(TipsViewModel.getTips()).map(Hash::toString).collect(Collectors.toList()));
+        return GetTipsResponse.create(TipsViewModel.getTips().stream().map(Hash::toString).collect(Collectors.toList()));
     }
 
     private AbstractResponse storeTransactionStatement(final List<String> trys) throws Exception {
@@ -299,6 +299,12 @@ public class API {
             final TransactionViewModel transactionViewModel = TransactionValidator.validate(Converter.trits(trytes));
             transactionViewModel.setArrivalTime(System.currentTimeMillis() / 1000L);
             transactionViewModel.store();
+            TransactionRequester.instance().clearTransactionRequest(transactionViewModel.getHash());
+            TransactionRequester.instance().requestTransaction(transactionViewModel.getBranchTransactionHash(), false);
+            TransactionRequester.instance().requestTransaction(transactionViewModel.getTrunkTransactionHash(), false);
+            if(transactionViewModel.getApprovers().size() == 0) {
+                TipsViewModel.addTipHash(transactionViewModel.getHash());
+            }
             transactionViewModel.updateSender("local");
         }
         return AbstractResponse.createEmptyResponse();

@@ -33,10 +33,12 @@ public class TransactionViewModelTest {
     public static void setUp() throws Exception {
         dbFolder.create();
         logFolder.create();
+        /*
         Configuration.put(Configuration.DefaultConfSettings.DB_PATH, "./tvmtestdb");
         Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, "./tvmtestdbl");
-        //Configuration.put(Configuration.DefaultConfSettings.DB_PATH, dbFolder.getRoot().getAbsolutePath());
-        //Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, logFolder.getRoot().getAbsolutePath());
+        */
+        Configuration.put(Configuration.DefaultConfSettings.DB_PATH, dbFolder.getRoot().getAbsolutePath());
+        Configuration.put(Configuration.DefaultConfSettings.DB_LOG_PATH, logFolder.getRoot().getAbsolutePath());
         Tangle.instance().addPersistenceProvider(RocksDBPersistenceProviderTest.rocksDBPersistenceProvider);
         //Tangle.instance().addPersistenceProvider(new MemDBPersistenceProvider());
         Tangle.instance().init();
@@ -45,7 +47,8 @@ public class TransactionViewModelTest {
     @AfterClass
     public static void tearDown() throws Exception {
         Tangle.instance().shutdown();
-        //dbFolder.delete();
+        dbFolder.delete();
+        logFolder.delete();
     }
 
     @Test
@@ -343,18 +346,19 @@ public class TransactionViewModelTest {
     //@Test
     public void testManyTXInDB() throws Exception {
         int i, j;
-        List<Hash> hashes = new ArrayList<>();
+        LinkedList<Hash> hashes = new LinkedList<>();
         Hash hash;
         hash = getRandomTransactionHash();
         hashes.add(hash);
         long start, diff, diffget;
         long subSumDiff=0,maxdiff=0, sumdiff = 0;
         int max = 990 * 1000;
-        int interval = 10000;
-        int interval1 = 500;
+        int interval1 = 50;
+        int interval = interval1*10;
         log.info("Starting Test. #TX: {}", TransactionViewModel.getNumberOfStoredTransactions());
         new TransactionViewModel(getRandomTransactionWithTrunkAndBranch(Hash.NULL_HASH, Hash.NULL_HASH), hash).store();
         TransactionViewModel transactionViewModel;
+        boolean pop = false;
         for (i = 0; i++ < max;) {
             hash = getRandomTransactionHash();
             j = hashes.size();
@@ -370,18 +374,24 @@ public class TransactionViewModelTest {
             start = System.nanoTime();
             TransactionViewModel.fromHash(hash);
             diffget = System.nanoTime() - start;
+            hashes.add(hash);
+            if(pop || i > 1000) {
+                hashes.removeFirst();
+            }
+
+            //log.info("{}", new String(new char[(int) ((diff/ 10000))]).replace('\0', '|'));
             if(i % interval1 == 0) {
                 //log.info("{}", new String(new char[(int) (diff / 50000)]).replace('\0', '-'));
-                log.info("{}", new String(new char[(int) ((subSumDiff / interval1 / 20000))]).replace('\0', '|'));
+                //log.info("{}", new String(new char[(int) ((subSumDiff / interval1 / 100000))]).replace('\0', '|'));
                 sumdiff += subSumDiff;
                 subSumDiff = 0;
             }
             if(i % interval == 0) {
-                log.info("Save time for {}: {} ms.\tGet Time: {} us.\tMax time: {} ms. Average: {}", i, (diff / 1000000.0) , diffget/1000, (maxdiff/ 1000000.0), sumdiff/interval/1000);
+                log.info("Save time for {}: {} us.\tGet Time: {} us.\tMax time: {} us. Average: {}", i,
+                        (diff / 1000) , diffget/1000, (maxdiff/ 1000), sumdiff/interval/1000);
                 sumdiff = 0;
                 maxdiff = 0;
             }
-            hashes.add(hash);
         }
         log.info("Done. #TX: {}", TransactionViewModel.getNumberOfStoredTransactions());
     }

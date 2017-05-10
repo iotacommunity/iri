@@ -164,25 +164,18 @@ public class TransactionViewModel {
     public void delete() throws Exception {
         Tangle.instance().delete(Transaction.class, getHash());
     }
+
+    public Map<Indexable, Persistable> getSaveBatch() throws Exception {
+        Map<Indexable, Persistable> hashesMap = storeHashes(Arrays.asList(getAddressHash(), getBundleHash(),
+                getBranchTransactionHash(), getTrunkTransactionHash(), getTagValue()));
+        getBytes();
+        hashesMap.put(getHash(), transaction);
+        return hashesMap;
+    }
+
     public boolean store() throws Exception {
         if(!exists(getHash())) {
-            TransactionRequester.instance().clearTransactionRequest(getHash());
-
-            //log.info("Tx To save Hash: " + getHash());
-            getBytes();
-
-            Map<Indexable, Persistable> hashesMap = storeHashes(Arrays.asList(getAddressHash(), getBundleHash(),
-                    getBranchTransactionHash(), getTrunkTransactionHash(), getTagValue()));
-            TransactionRequester.instance().requestTransaction(getBranchTransactionHash(), false);
-            TransactionRequester.instance().requestTransaction(getTrunkTransactionHash(), false);
-            if(getApprovers().size() == 0) {
-                TipsViewModel.addTipHash(getHash());
-            }
-            TipsViewModel.removeTipHash(getBranchTransactionHash());
-            TipsViewModel.removeTipHash(getTrunkTransactionHash());
-            getBytes();
-            hashesMap.put(getHash(), transaction);
-            return Tangle.instance().saveBatch(hashesMap);
+            return Tangle.instance().saveBatch(getSaveBatch());
         }
         return false;
     }

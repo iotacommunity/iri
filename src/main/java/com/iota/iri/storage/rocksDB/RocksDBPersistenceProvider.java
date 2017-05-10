@@ -47,7 +47,6 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
 
     private final AtomicReference<Map<Class<?>, ColumnFamilyHandle>> classTreeMap = new AtomicReference<>();
     private final AtomicReference<Map<Class<?>, ColumnFamilyHandle>> metadataReference = new AtomicReference<>();
-    //private final Map<Class<?>, Long> counts = new ConcurrentHashMap<>();
 
     private final SecureRandom seed = new SecureRandom();
 
@@ -394,23 +393,25 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
             pathToLogDir.mkdir();
         }
 
+        RocksEnv.getDefault()
+                .setBackgroundThreads(Runtime.getRuntime().availableProcessors()/2, RocksEnv.FLUSH_POOL)
+                .setBackgroundThreads(Runtime.getRuntime().availableProcessors()/2, RocksEnv.COMPACTION_POOL)
         /*
-        RocksEnv.getDefault().setBackgroundThreads(Runtime.getRuntime().availableProcessors())
-                .setBackgroundThreads(Runtime.getRuntime().availableProcessors(), RocksEnv.FLUSH_POOL)
-                .setBackgroundThreads(Runtime.getRuntime().availableProcessors(), RocksEnv.COMPACTION_POOL);
+                .setBackgroundThreads(Runtime.getRuntime().availableProcessors())
         */
+        ;
 
         options = new DBOptions()
                 .setCreateIfMissing(true)
                 .setCreateMissingColumnFamilies(true)
                 .setDbLogDir(logPath)
-                .setMaxLogFileSize(2 * SizeUnit.MB)
-                .setMaxManifestFileSize(2 * SizeUnit.MB)
-                .setMaxOpenFiles(-1)
+                .setMaxLogFileSize(SizeUnit.MB)
+                .setMaxManifestFileSize(SizeUnit.MB)
+                .setMaxOpenFiles(10000)
                 .setMaxBackgroundCompactions(1)
-                .setBytesPerSync(64 * SizeUnit.KB)
-                .setMaxTotalWalSize(2 * SizeUnit.MB)
                 /*
+                .setBytesPerSync(4 * SizeUnit.MB)
+                .setMaxTotalWalSize(16 * SizeUnit.MB)
                 */
         ;
         options.setMaxSubcompactions(Runtime.getRuntime().availableProcessors());
@@ -419,24 +420,24 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
         PlainTableConfig plainTableConfig = new PlainTableConfig();
         BlockBasedTableConfig blockBasedTableConfig = new BlockBasedTableConfig().setFilter(bloomFilter);
         blockBasedTableConfig
-                .setBlockCacheSize(2 * SizeUnit.MB)
                 .setFilter(bloomFilter)
-                /*
-                .setCacheNumShardBits(9)
-                .setBlockSizeDeviation(20)
-                .setBlockRestartInterval(32)
-                .setCacheIndexAndFilterBlocks(true)
-                .setHashIndexAllowCollision(true)
-                .setBlockCacheCompressedSize(160 * SizeUnit.KB)
+                .setCacheNumShardBits(2)
+                .setBlockSizeDeviation(10)
+                .setBlockRestartInterval(16)
+                .setBlockCacheSize(200 * SizeUnit.KB)
                 .setBlockCacheCompressedNumShardBits(10)
+                .setBlockCacheCompressedSize(32 * SizeUnit.KB)
+                /*
+                .setHashIndexAllowCollision(true)
+                .setCacheIndexAndFilterBlocks(true)
                 */
                 ;
         options.setAllowConcurrentMemtableWrite(true);
 
         MemTableConfig hashSkipListMemTableConfig = new HashSkipListMemTableConfig()
-                .setHeight(4)
-                .setBranchingFactor(4)
-                .setBucketCount(2000000);
+                .setHeight(9)
+                .setBranchingFactor(9)
+                .setBucketCount(2 * SizeUnit.MB);
         MemTableConfig hashLinkedListMemTableConfig = new HashLinkedListMemTableConfig().setBucketCount(100000);
         MemTableConfig vectorTableConfig = new VectorMemTableConfig().setReservedSize(10000);
         MemTableConfig skipListMemTableConfig = new SkipListMemTableConfig();
@@ -446,11 +447,11 @@ public class RocksDBPersistenceProvider implements PersistenceProvider {
         ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions()
                 .setMergeOperator(mergeOperator)
                 .setTableFormatConfig(blockBasedTableConfig)
-                /*
-                .setMaxWriteBufferNumber(64)
+                .setMaxWriteBufferNumber(2)
+                .setWriteBufferSize(2 * SizeUnit.MB)
                 .setCompactionStyle(CompactionStyle.UNIVERSAL)
                 .setCompressionType(CompressionType.SNAPPY_COMPRESSION)
-                .setWriteBufferSize(64 * SizeUnit.MB)
+                /*
                 */
                 ;
         //columnFamilyOptions.setMemTableConfig(hashSkipListMemTableConfig);
