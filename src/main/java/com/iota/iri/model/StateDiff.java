@@ -23,8 +23,8 @@ public class StateDiff implements Persistable {
     }
     public void read(byte[] bytes) {
         int i;
+        state = new HashMap<>();
         if(bytes != null) {
-            state = new HashMap<>();
             for (i = 0; i < bytes.length; i += Hash.SIZE_IN_BYTES + Long.BYTES) {
                 state.put(new Hash(bytes, i, Hash.SIZE_IN_BYTES),
                         Serializer.getLong(Arrays.copyOfRange(bytes, i + Hash.SIZE_IN_BYTES, i + Hash.SIZE_IN_BYTES + Long.BYTES)));
