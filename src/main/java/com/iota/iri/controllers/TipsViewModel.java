@@ -5,6 +5,8 @@ import com.iota.iri.model.Transaction;
 import com.iota.iri.storage.Indexable;
 import com.iota.iri.storage.Tangle;
 import org.apache.commons.lang3.ArrayUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.security.SecureRandom;
 import java.util.*;
@@ -15,6 +17,7 @@ import java.util.stream.Collectors;
  * Created by paul on 3/14/17 for iri-testnet.
  */
 public class TipsViewModel {
+    static final Logger log = LoggerFactory.getLogger(TipsViewModel.class);
 
     private static Set<Hash> tips = new HashSet<>();
     private static Set<Hash> solidTips = new HashSet<>();
@@ -54,22 +57,32 @@ public class TipsViewModel {
     }
     public static Hash getRandomSolidTipHash() {
         synchronized (sync) {
-            int index = seed.nextInt(solidTips.size());
+            int size = solidTips.size();
+            if(size == 0) {
+                return null;
+            }
+            int index = seed.nextInt(size);
             Iterator<Hash> hashIterator;
             hashIterator = solidTips.iterator();
-            while(--index > 0 && hashIterator.hasNext()){ hashIterator.next();}
-            return hashIterator.next();
+            Hash hash = null;
+            while(index-- > 1 && hashIterator.hasNext()){ hash = hashIterator.next();}
+            return hash;
             //return solidTips.size() != 0 ? solidTips.get(seed.nextInt(solidTips.size())) : getRandomNonSolidTipHash();
         }
     }
 
     public static Hash getRandomNonSolidTipHash() {
         synchronized (sync) {
-            int index = seed.nextInt(tips.size());
+            int size = tips.size();
+            if(size == 0) {
+                return null;
+            }
+            int index = seed.nextInt(size);
             Iterator<Hash> hashIterator;
             hashIterator = tips.iterator();
-            while(--index > 0 && hashIterator.hasNext()){ hashIterator.next();}
-            return hashIterator.next();
+            Hash hash = null;
+            while(index-- > 1 && hashIterator.hasNext()){ hash = hashIterator.next();}
+            return hash;
             //return tips.size() != 0 ? tips.get(seed.nextInt(tips.size())) : null;
         }
     }
